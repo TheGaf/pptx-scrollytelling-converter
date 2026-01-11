@@ -283,7 +283,7 @@ var PPTXParser = (function() {
             var relMatch = slideRelsXml.match(relRegex);
             
             if (relMatch) {
-                var targetPath = relMatch[1].replace('../', 'ppt/');
+                var targetPath = relMatch[1].replace(/\.\.\//g, 'ppt/');
                 var filename = targetPath.split('/').pop();
                 var extension = filename.split('.').pop().toLowerCase();
                 

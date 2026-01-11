@@ -4,21 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Module A: PPTX Parser Demo</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="pptx-parser.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* Desktop layout - fixed 1400px */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #333;
             min-height: 100vh;
             padding: 2rem;
+            overflow-x: auto;
         }
         .container {
-            max-width: 1400px;
+            width: 1400px;
             margin: 0 auto;
         }
+        
+        /* Mobile layout - fixed 375px */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            .container {
+                width: 375px;
+                margin: 0 auto;
+            }
+        }
+        
         header {
             background: white;
             padding: 2rem;
@@ -26,14 +41,37 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
             margin-bottom: 2rem;
         }
+        
+        @media (max-width: 768px) {
+            header {
+                padding: 1rem;
+                border-radius: 0.5rem;
+            }
+        }
+        
         h1 {
             color: #667eea;
             margin-bottom: 0.5rem;
+            font-size: 2rem;
         }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+        
         .subtitle {
             color: #666;
             font-size: 1.1rem;
         }
+        
+        @media (max-width: 768px) {
+            .subtitle {
+                font-size: 0.9rem;
+            }
+        }
+        
         .upload-section {
             background: white;
             padding: 2rem;
@@ -41,6 +79,14 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
             margin-bottom: 2rem;
         }
+        
+        @media (max-width: 768px) {
+            .upload-section {
+                padding: 1rem;
+                border-radius: 0.5rem;
+            }
+        }
+        
         .drop-zone {
             border: 3px dashed #667eea;
             border-radius: 0.5rem;
@@ -50,6 +96,13 @@
             transition: all 0.3s;
             background: #f8f9ff;
         }
+        
+        @media (max-width: 768px) {
+            .drop-zone {
+                padding: 2rem 1rem;
+            }
+        }
+        
         .drop-zone:hover {
             background: #eef1ff;
             border-color: #764ba2;
@@ -68,6 +121,14 @@
             border-radius: 0.5rem;
             display: none;
         }
+        
+        @media (max-width: 768px) {
+            .status {
+                padding: 0.75rem;
+                font-size: 0.9rem;
+            }
+        }
+        
         .status.show {
             display: block;
         }
@@ -93,6 +154,14 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
             display: none;
         }
+        
+        @media (max-width: 768px) {
+            .results {
+                padding: 1rem;
+                border-radius: 0.5rem;
+            }
+        }
+        
         .results.show {
             display: block;
         }
@@ -101,6 +170,14 @@
             margin-bottom: 1.5rem;
             border-bottom: 3px solid #667eea;
             padding-bottom: 0.5rem;
+            font-size: 1.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .results h2 {
+                font-size: 1.25rem;
+                margin-bottom: 1rem;
+            }
         }
         .json-view {
             background: #f8f9fa;
@@ -111,18 +188,43 @@
             max-height: 600px;
             overflow-y: auto;
         }
+        
+        @media (max-width: 768px) {
+            .json-view {
+                padding: 1rem;
+                max-height: 400px;
+                font-size: 0.8rem;
+            }
+        }
+        
         pre {
             margin: 0;
             font-family: 'Courier New', monospace;
             font-size: 0.9rem;
             line-height: 1.6;
         }
+        
+        @media (max-width: 768px) {
+            pre {
+                font-size: 0.75rem;
+            }
+        }
+        
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
+        
+        @media (max-width: 768px) {
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.75rem;
+                margin-bottom: 1rem;
+            }
+        }
+        
         .summary-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -130,6 +232,13 @@
             border-radius: 0.5rem;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
+        
+        @media (max-width: 768px) {
+            .summary-card {
+                padding: 1rem;
+            }
+        }
+        
         .summary-card h3 {
             font-size: 0.9rem;
             text-transform: uppercase;
@@ -137,10 +246,24 @@
             opacity: 0.9;
             margin-bottom: 0.5rem;
         }
+        
+        @media (max-width: 768px) {
+            .summary-card h3 {
+                font-size: 0.7rem;
+            }
+        }
+        
         .summary-card .value {
             font-size: 2rem;
             font-weight: bold;
         }
+        
+        @media (max-width: 768px) {
+            .summary-card .value {
+                font-size: 1.5rem;
+            }
+        }
+        
         .btn {
             background: #667eea;
             color: white;
@@ -153,6 +276,14 @@
             transition: all 0.3s;
             margin-top: 1rem;
         }
+        
+        @media (max-width: 768px) {
+            .btn {
+                padding: 0.6rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+        
         .btn:hover {
             background: #764ba2;
             transform: translateY(-2px);
@@ -169,6 +300,13 @@
             flex-wrap: wrap;
             margin-top: 1rem;
         }
+        
+        @media (max-width: 768px) {
+            .color-palette {
+                gap: 0.25rem;
+            }
+        }
+        
         .color-swatch {
             width: 50px;
             height: 50px;
@@ -177,6 +315,14 @@
             position: relative;
             cursor: help;
         }
+        
+        @media (max-width: 768px) {
+            .color-swatch {
+                width: 35px;
+                height: 35px;
+            }
+        }
+        
         .color-swatch:hover::after {
             content: attr(data-color);
             position: absolute;
@@ -189,6 +335,7 @@
             border-radius: 0.25rem;
             font-size: 0.75rem;
             white-space: nowrap;
+            z-index: 10;
         }
         .spinner {
             border: 4px solid #f3f3f3;
@@ -208,7 +355,15 @@
             gap: 0.5rem;
             margin-bottom: 1rem;
             border-bottom: 2px solid #dee2e6;
+            overflow-x: auto;
         }
+        
+        @media (max-width: 768px) {
+            .tabs {
+                gap: 0.25rem;
+            }
+        }
+        
         .tab {
             padding: 0.75rem 1.5rem;
             background: transparent;
@@ -218,7 +373,16 @@
             color: #666;
             border-bottom: 3px solid transparent;
             transition: all 0.3s;
+            white-space: nowrap;
         }
+        
+        @media (max-width: 768px) {
+            .tab {
+                padding: 0.6rem 1rem;
+                font-size: 0.85rem;
+            }
+        }
+        
         .tab:hover {
             color: #667eea;
         }
@@ -239,10 +403,25 @@
             margin-bottom: 1rem;
             background: #f8f9fa;
         }
+        
+        @media (max-width: 768px) {
+            .slide-preview {
+                padding: 0.75rem;
+            }
+        }
+        
         .slide-preview h4 {
             color: #667eea;
             margin-bottom: 0.5rem;
+            font-size: 1.1rem;
         }
+        
+        @media (max-width: 768px) {
+            .slide-preview h4 {
+                font-size: 1rem;
+            }
+        }
+        
         .badge {
             display: inline-block;
             padding: 0.25rem 0.5rem;
