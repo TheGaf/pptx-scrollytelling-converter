@@ -270,7 +270,7 @@
     <div class="container">
         <header>
             <h1>PPTX to Scrollytelling</h1>
-            <p class="subtitle">Convert your PowerPoint to an interactive scrollytelling site</p>
+            <p class="subtitle">Convert your PowerPoint to a WCAG-ready scrollytelling site</p>
             
             <div class="accessibility-controls">
                 <button id="contrastToggle" aria-label="Toggle high contrast mode">
@@ -531,9 +531,16 @@
                     return;
                 }
                 
+                // Validate PPTX structure
+                var contentTypesFile = zipFile.file('[Content_Types].xml');
                 var slideFolder = zipFile.folder('ppt/slides');
+                var relsFolder = zipFile.folder('ppt/slides/_rels');
+                
+                if (!contentTypesFile) {
+                    throw new Error('Invalid PPTX file: Missing [Content_Types].xml');
+                }
                 if (!slideFolder) {
-                    throw new Error('No slides found in PPTX file');
+                    throw new Error('Invalid PPTX file: No slides found');
                 }
                 
                 var slideFiles = Object.keys(slideFolder.files)
@@ -545,6 +552,10 @@
                         var numB = matchB ? parseInt(matchB[0]) : 0;
                         return numA - numB;
                     });
+                
+                if (slideFiles.length === 0) {
+                    throw new Error('Invalid PPTX file: No slide content found');
+                }
                 
                 summaryData.slides = slideFiles.length;
                 document.getElementById('loadtxt').textContent = 'Processing ' + slideFiles.length + ' slides...';
@@ -561,7 +572,7 @@
                     document.getElementById('loadtxt').textContent = 'Processing slide ' + slideNum + ' of ' + slideFiles.length + '...';
                     
                     var slideXml = await slideFolder.file(slideFiles[i]).async('string');
-                    var slideImages = await getSlideImages(zipFile, slideNum);
+                    var slideImages = await getSlideImages(zipFile, slideNum, slideXml);
                     var slideText = parseSlideText(slideXml);
                     
                     summaryData.images.push({ slide: slideNum, count: slideImages.length });
@@ -603,59 +614,108 @@
             }
         }
 
-        async function getSlideImages(zipFile, slideNum) {
+        async function getSlideImages(zipFile, slideNum, slideXml) {
             var images = [];
             
             try {
+                // Parse slide XML to find image references (r:embed or r:id attributes)
+                var slideParser = new DOMParser();
+                var slideDoc = slideParser.parseFromString(slideXml, 'text/xml');
+                
+                // Find all image references in the slide
+                var picElements = slideDoc.getElementsByTagName('p:pic');
+                var imageRefs = [];
+                
+                for (var i = 0; i < picElements.length; i++) {
+                    var blipElements = picElements[i].getElementsByTagName('a:blip');
+                    for (var j = 0; j < blipElements.length; j++) {
+                        var embedAttr = blipElements[j].getAttribute('r:embed') || blipElements[j].getAttribute('r:link');
+                        if (embedAttr) {
+                            imageRefs.push(embedAttr);
+                        }
+                    }
+                }
+                
+                // Load relationship file
                 var relsPath = 'ppt/slides/_rels/slide' + slideNum + '.xml.rels';
                 var relsFile = zipFile.file(relsPath);
                 
                 if (!relsFile) {
+                    // No relationships file - no images
+                    if (imageRefs.length > 0) {
+                        summaryData.warnings.push('Slide ' + slideNum + ': Found image references but no relationships file');
+                    }
                     return images;
                 }
                 
                 var relsXml = await relsFile.async('string');
-                var parser = new DOMParser();
-                var relsDoc = parser.parseFromString(relsXml, 'text/xml');
+                var relsParser = new DOMParser();
+                var relsDoc = relsParser.parseFromString(relsXml, 'text/xml');
+                
+                // Build a map of relationship IDs to image targets
                 var relationships = relsDoc.querySelectorAll('Relationship');
+                var relMap = {};
                 
                 for (var i = 0; i < relationships.length; i++) {
                     var rel = relationships[i];
+                    var relId = rel.getAttribute('Id');
                     var type = rel.getAttribute('Type');
                     var target = rel.getAttribute('Target');
                     
-                    if (type && type.includes('image') && target) {
-                        var imagePath = 'ppt/slides/' + target.replace('../', '');
-                        var imageFile = zipFile.file(imagePath);
-                        
-                        if (imageFile) {
-                            var imageData = await imageFile.async('base64');
-                            var ext = imagePath.split('.').pop().toLowerCase();
-                            
-                            // Validate and map file extensions to MIME types
-                            var mimeTypeMap = {
-                                'jpg': 'image/jpeg',
-                                'jpeg': 'image/jpeg',
-                                'png': 'image/png',
-                                'gif': 'image/gif',
-                                'svg': 'image/svg+xml',
-                                'bmp': 'image/bmp',
-                                'webp': 'image/webp'
-                            };
-                            
-                            var mimeType = mimeTypeMap[ext];
-                            if (!mimeType) {
-                                summaryData.warnings.push('Unknown image format: ' + ext + ' in slide ' + slideNum);
-                                mimeType = 'image/png'; // Default fallback
-                            }
-                            
-                            images.push({
-                                data: 'data:' + mimeType + ';base64,' + imageData,
-                                isBackground: i === 0
-                            });
-                        }
+                    if (type && type.includes('image') && target && relId) {
+                        relMap[relId] = target;
                     }
                 }
+                
+                // Match image references to actual files
+                for (var i = 0; i < imageRefs.length; i++) {
+                    var refId = imageRefs[i];
+                    var target = relMap[refId];
+                    
+                    if (!target) {
+                        summaryData.warnings.push('Slide ' + slideNum + ': Could not resolve image reference ' + refId);
+                        continue;
+                    }
+                    
+                    var imagePath = 'ppt/slides/' + target.replace('../', '');
+                    var imageFile = zipFile.file(imagePath);
+                    
+                    if (imageFile) {
+                        var imageData = await imageFile.async('base64');
+                        var ext = imagePath.split('.').pop().toLowerCase();
+                        
+                        // Validate and map file extensions to MIME types
+                        var mimeTypeMap = {
+                            'jpg': 'image/jpeg',
+                            'jpeg': 'image/jpeg',
+                            'png': 'image/png',
+                            'gif': 'image/gif',
+                            'svg': 'image/svg+xml',
+                            'bmp': 'image/bmp',
+                            'webp': 'image/webp'
+                        };
+                        
+                        var mimeType = mimeTypeMap[ext];
+                        if (!mimeType) {
+                            summaryData.warnings.push('Unknown image format: ' + ext + ' in slide ' + slideNum);
+                            mimeType = 'image/png'; // Default fallback
+                        }
+                        
+                        images.push({
+                            data: 'data:' + mimeType + ';base64,' + imageData,
+                            rId: refId,
+                            isBackground: i === 0  // First referenced image becomes background
+                        });
+                    } else {
+                        summaryData.warnings.push('Slide ' + slideNum + ': Image file not found: ' + imagePath);
+                    }
+                }
+                
+                // Add note if no images were resolved
+                if (imageRefs.length > 0 && images.length === 0) {
+                    summaryData.warnings.push('Slide ' + slideNum + ': Could not load any images despite ' + imageRefs.length + ' reference(s)');
+                }
+                
             } catch (e) {
                 summaryData.warnings.push('Could not load images for slide ' + slideNum + ': ' + e.message);
             }
@@ -667,73 +727,94 @@
             var parser = new DOMParser();
             var doc = parser.parseFromString(xml, 'text/xml');
             
-            // Use getElementsByTagName for better cross-browser compatibility with namespaced elements
-            var texts = [];
-            var aTexts = doc.getElementsByTagName('a:t');
-            var plainTexts = doc.getElementsByTagName('t');
-            
-            // Combine both nodesets, avoiding duplicates
-            for (var i = 0; i < aTexts.length; i++) {
-                texts.push(aTexts[i]);
-            }
-            for (var i = 0; i < plainTexts.length; i++) {
-                // Check if this element is already in the list (as 'a:t')
-                var isDuplicate = false;
-                for (var j = 0; j < aTexts.length; j++) {
-                    if (plainTexts[i] === aTexts[j]) {
-                        isDuplicate = true;
-                        break;
-                    }
-                }
-                if (!isDuplicate) {
-                    texts.push(plainTexts[i]);
-                }
-            }
+            // Get all paragraph elements (a:p or p)
+            var aParagraphs = doc.getElementsByTagName('a:p');
+            var plainParagraphs = doc.getElementsByTagName('p');
             
             var paragraphs = [];
-            var currentPara = '';
             
-            texts.forEach(function(t) {
-                var text = t.textContent.trim();
-                if (text) {
-                    // Try to find parent paragraph element
-                    var paraNode = t.parentElement;
-                    while (paraNode && paraNode.localName !== 'p') {
-                        paraNode = paraNode.parentElement;
-                        if (!paraNode || paraNode === doc.documentElement) {
-                            paraNode = null;
-                            break;
-                        }
-                    }
+            // Process a:p elements
+            for (var i = 0; i < aParagraphs.length; i++) {
+                var para = aParagraphs[i];
+                
+                // Check if paragraph has bullet properties
+                var hasBullet = false;
+                var pPrElements = para.getElementsByTagName('a:pPr');
+                
+                if (pPrElements.length > 0) {
+                    var pPr = pPrElements[0];
+                    // Check for bullet character (a:buChar) or auto-numbering (a:buAutoNum)
+                    var buChar = pPr.getElementsByTagName('a:buChar');
+                    var buAutoNum = pPr.getElementsByTagName('a:buAutoNum');
+                    var buNone = pPr.getElementsByTagName('a:buNone');
                     
-                    if (paraNode && currentPara && text) {
-                        currentPara += ' ' + text;
-                    } else {
-                        if (currentPara) {
-                            paragraphs.push(currentPara);
-                        }
-                        currentPara = text;
+                    // Has bullet if buChar or buAutoNum present, and buNone not present
+                    if ((buChar.length > 0 || buAutoNum.length > 0) && buNone.length === 0) {
+                        hasBullet = true;
                     }
                 }
-            });
+                
+                // Extract text from paragraph
+                var textElements = para.getElementsByTagName('a:t');
+                var paraText = '';
+                for (var j = 0; j < textElements.length; j++) {
+                    paraText += textElements[j].textContent;
+                }
+                
+                paraText = paraText.trim();
+                if (paraText) {
+                    paragraphs.push({
+                        text: paraText,
+                        isBullet: hasBullet
+                    });
+                }
+            }
             
-            if (currentPara) {
-                paragraphs.push(currentPara);
+            // Process plain p elements if no a:p found
+            if (paragraphs.length === 0) {
+                for (var i = 0; i < plainParagraphs.length; i++) {
+                    var para = plainParagraphs[i];
+                    var textElements = para.getElementsByTagName('t');
+                    var paraText = '';
+                    for (var j = 0; j < textElements.length; j++) {
+                        paraText += textElements[j].textContent;
+                    }
+                    
+                    paraText = paraText.trim();
+                    if (paraText) {
+                        // Fallback: detect bullets by Unicode characters
+                        var hasBullet = BULLET_PATTERN.test(paraText);
+                        paragraphs.push({
+                            text: paraText,
+                            isBullet: hasBullet
+                        });
+                    }
+                }
             }
             
             var result = {
-                heading: paragraphs.length > 0 ? paragraphs[0] : '',
+                heading: '',
                 content: []
             };
             
-            for (var i = 1; i < paragraphs.length; i++) {
-                var para = paragraphs[i];
-                var isBullet = para.match(BULLET_PATTERN);
-                
-                result.content.push({
-                    text: para,
-                    isBullet: !!isBullet
-                });
+            // First non-bullet paragraph becomes heading
+            for (var i = 0; i < paragraphs.length; i++) {
+                if (!paragraphs[i].isBullet && paragraphs[i].text) {
+                    result.heading = paragraphs[i].text;
+                    // Rest becomes content
+                    for (var j = i + 1; j < paragraphs.length; j++) {
+                        result.content.push(paragraphs[j]);
+                    }
+                    break;
+                }
+            }
+            
+            // If all paragraphs are bullets or no heading found, use first as heading
+            if (!result.heading && paragraphs.length > 0) {
+                result.heading = paragraphs[0].text;
+                for (var i = 1; i < paragraphs.length; i++) {
+                    result.content.push(paragraphs[i]);
+                }
             }
             
             return result;
@@ -797,21 +878,39 @@
                 secs += '<section style="' + bgStyle + '"><div class="ov"></div><div class="con">' + heading + content + inlineImages + '</div></section>';
             }
 
+            // Check if any slides have text over background images
+            var hasTextOverBackground = false;
+            for (var i = 0; i < slides.length; i++) {
+                if (slides[i].images.length > 0 && (slides[i].text.heading || slides[i].text.content.length > 0)) {
+                    hasTextOverBackground = true;
+                    break;
+                }
+            }
+
             var reducedMotionCSS = '@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }';
             
-            var css = '*{margin:0;padding:0;box-sizing:border-box}:root{--p:' + t.p + ';--s:' + t.s + ';--b1:' + t.bg1 + ';--b2:' + t.bg2 + '}html{scroll-behavior:smooth}body{font-family:Titillium Web,sans-serif;background:linear-gradient(135deg,var(--b1),var(--b2));color:#f5f5f5;line-height:1.6}body[data-contrast="high"]{background:#000;color:#fff;}.pb{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--p),var(--s));z-index:1000;width:0;transition:width 0.3s}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 0}@media(min-width:1024px){section{min-height:100vh;padding:0}}.con{max-width:1200px;margin:0 auto;padding:2rem;width:100%;position:relative;z-index:10}h1{font-size:clamp(2.5rem,8vw,5rem);font-weight:700;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--p),#fff,var(--s));-webkit-background-clip:text;-webkit-text-fill-color:transparent}h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;margin-bottom:2rem}p{font-size:1.1rem;color:rgba(255,255,255,0.8);margin-bottom:1rem}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.5rem;color:rgba(255,255,255,0.8)}.ov{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,rgba(26,10,46,0.8),rgba(26,10,46,0.6));z-index:2}#hero{background:linear-gradient(135deg,var(--b1),var(--b2))}.hc{text-align:center;animation:fadeIn 1s}@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}footer{padding:2rem;border-top:1px solid rgba(255,255,255,0.1);text-align:center;color:rgba(255,255,255,0.5)}.contrast-toggle{position:fixed;top:1rem;right:1rem;padding:0.5rem 1rem;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.2);color:#f5f5f5;cursor:pointer;border-radius:0.5rem;z-index:1001;font-family:inherit;font-weight:600}body[data-contrast="high"] .contrast-toggle{background:#fff;color:#000;border-color:#fff}' + reducedMotionCSS;
-
-            var accessibilityReport = generateAccessibilityReport(slides);
+            var skipLinkCSS = '.skip-link{position:absolute;top:-40px;left:0;background:#fff;color:#000;padding:8px 16px;text-decoration:none;z-index:10000;font-weight:600;border:2px solid #000}.skip-link:focus{top:0;outline:2px solid #00d9ff;outline-offset:2px}';
             
-            var result = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + escapeHtml(titleinp.value) + '</title><link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><button class="contrast-toggle" id="contrastBtn" aria-label="Toggle high contrast mode">High Contrast</button><div class="pb" id="pb"></div><header id="hero"><div class="ov"></div><div class="con"><div class="hc"><h1>' + escapeHtml(titleinp.value) + '</h1><p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p></div></div></header><main>' + secs + '</main><footer><p>' + escapeHtml(copyinp.value) + '</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"});document.getElementById("contrastBtn").addEventListener("click",function(){var isHigh=document.body.getAttribute("data-contrast")==="high";if(isHigh){document.body.removeAttribute("data-contrast");this.textContent="High Contrast";}else{document.body.setAttribute("data-contrast","high");this.textContent="Normal Contrast";}});<\/script></body></html>';
+            var focusStylesCSS = 'button:focus,a:focus,.contrast-toggle:focus{outline:2px solid #00d9ff;outline-offset:2px}';
+            
+            var css = '*{margin:0;padding:0;box-sizing:border-box}' + skipLinkCSS + focusStylesCSS + ':root{--p:' + t.p + ';--s:' + t.s + ';--b1:' + t.bg1 + ';--b2:' + t.bg2 + '}html{scroll-behavior:smooth}body{font-family:Titillium Web,sans-serif;background:linear-gradient(135deg,var(--b1),var(--b2));color:#f5f5f5;line-height:1.6}body[data-contrast="high"]{background:#000;color:#fff;}.pb{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--p),var(--s));z-index:1000;width:0;transition:width 0.3s}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 0}@media(min-width:1024px){section{min-height:100vh;padding:0}}.con{max-width:1200px;margin:0 auto;padding:2rem;width:100%;position:relative;z-index:10}h1{font-size:clamp(2.5rem,8vw,5rem);font-weight:700;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--p),#fff,var(--s));-webkit-background-clip:text;-webkit-text-fill-color:transparent}h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;margin-bottom:2rem}p{font-size:1.1rem;color:rgba(255,255,255,0.8);margin-bottom:1rem}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.5rem;color:rgba(255,255,255,0.8)}.ov{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,rgba(26,10,46,0.8),rgba(26,10,46,0.6));z-index:2}#hero{background:linear-gradient(135deg,var(--b1),var(--b2))}.hc{text-align:center;animation:fadeIn 1s}@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}footer{padding:2rem;border-top:1px solid rgba(255,255,255,0.1);text-align:center;color:rgba(255,255,255,0.5)}.contrast-toggle{position:fixed;top:1rem;right:1rem;padding:0.5rem 1rem;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.2);color:#f5f5f5;cursor:pointer;border-radius:0.5rem;z-index:1001;font-family:inherit;font-weight:600}body[data-contrast="high"] .contrast-toggle{background:#fff;color:#000;border-color:#fff}' + reducedMotionCSS;
+
+            var accessibilityReport = generateAccessibilityReport(slides, hasTextOverBackground);
+            
+            var result = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + escapeHtml(titleinp.value) + '</title><link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><a href="#main" class="skip-link">Skip to main content</a><button class="contrast-toggle" id="contrastBtn" aria-label="Toggle high contrast mode">High Contrast</button><div class="pb" id="pb"></div><header id="hero"><div class="ov"></div><div class="con"><div class="hc"><h1>' + escapeHtml(titleinp.value) + '</h1><p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p></div></div></header><main id="main">' + secs + '</main><footer><p>' + escapeHtml(copyinp.value) + '</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"});document.getElementById("contrastBtn").addEventListener("click",function(){var isHigh=document.body.getAttribute("data-contrast")==="high";if(isHigh){document.body.removeAttribute("data-contrast");this.textContent="High Contrast";}else{document.body.setAttribute("data-contrast","high");this.textContent="Normal Contrast";}});<\/script></body></html>';
 
             return result;
         }
 
-        function generateAccessibilityReport(slides) {
+        function generateAccessibilityReport(slides, hasTextOverBackground) {
             var report = [];
             report.push('ACCESSIBILITY REPORT');
             report.push('Generated: ' + new Date().toISOString());
+            report.push('');
+            report.push('=== IMPORTANT NOTES ===');
+            report.push('This report covers the TECHNICAL accessibility features of the generated site.');
+            report.push('WCAG compliance also depends on source content quality (e.g., meaningful');
+            report.push('headings, sufficient color contrast, appropriate image usage).');
             report.push('');
             report.push('=== CONTENT SUMMARY ===');
             report.push('Total slides: ' + slides.length);
@@ -826,34 +925,73 @@
                     totalImages += slide.images.length;
                     backgroundImages += 1; // First image is background
                     inlineImages += Math.max(0, slide.images.length - 1);
-                    // All images will have alt text (generated from slide heading or slide number)
-                    imagesWithAlt += Math.max(0, slide.images.length - 1); // Only inline images have alt text
+                    // Only inline images have alt text
+                    imagesWithAlt += Math.max(0, slide.images.length - 1);
                 }
             });
             
             report.push('Total images: ' + totalImages);
-            report.push('Background images: ' + backgroundImages);
+            report.push('Background images: ' + backgroundImages + ' (CSS decorative)');
             report.push('Inline images: ' + inlineImages);
             report.push('Images with alt text: ' + imagesWithAlt + ' (all inline images)');
             report.push('');
-            report.push('=== WCAG COMPLIANCE ===');
+            report.push('=== WCAG-READY FEATURES ===');
+            report.push('[✓] Skip link ("Skip to main content") for keyboard navigation');
             report.push('[✓] Semantic HTML structure (header, main, footer)');
-            report.push('[✓] High contrast mode available');
-            report.push('[✓] Respects prefers-reduced-motion');
-            report.push('[✓] All images have alt text');
+            report.push('[✓] High contrast toggle button');
+            report.push('[✓] Respects prefers-reduced-motion (disables animations)');
+            report.push('[✓] Visible focus indicators on interactive elements');
+            report.push('[✓] All inline images have descriptive alt text');
             report.push('[✓] Lazy loading enabled for images');
-            report.push('[✓] Keyboard accessible');
+            report.push('[✓] Keyboard accessible (all functionality via keyboard)');
+            report.push('[✓] ARIA labels on interactive controls');
             report.push('');
-            report.push('=== FEATURES ===');
-            report.push('- High contrast toggle button');
-            report.push('- Motion-safe animations');
-            report.push('- Progress indicator');
-            report.push('- Responsive design');
-            report.push('- Screen reader friendly');
+            report.push('=== BACKGROUND IMAGES (CSS) ===');
+            report.push('Background images are implemented as CSS background-image properties.');
+            report.push('Per WCAG guidelines, these are treated as DECORATIVE and do not require');
+            report.push('alt text. All MEANINGFUL images must be inline <img> elements.');
+            report.push('');
+            if (hasTextOverBackground) {
+                report.push('⚠ WARNING: Text content is placed over background images.');
+                report.push('  Ensure sufficient contrast between text and background.');
+                report.push('  Test with high contrast mode and verify readability.');
+                report.push('');
+            }
+            report.push('=== CONTENT-DEPENDENT COMPLIANCE ===');
+            report.push('The following require manual verification:');
+            report.push('- Color contrast ratios (text vs background)');
+            report.push('- Heading structure and hierarchy');
+            report.push('- Link text meaningfulness');
+            report.push('- Image alt text accuracy and completeness');
+            report.push('- Content readability and clarity');
+            report.push('');
+            report.push('=== LIMITATIONS DOCUMENTED ===');
+            report.push('1. Image-to-slide mapping: Uses r:embed references from slide XML.');
+            report.push('   Order is based on appearance in slide XML, which may differ from');
+            report.push('   visual stacking order. First referenced image becomes background.');
+            report.push('');
+            report.push('2. Bullet detection: Uses paragraph properties (a:pPr, a:buChar,');
+            report.push('   a:buAutoNum) when available. Falls back to Unicode bullet character');
+            report.push('   detection for plain text paragraphs.');
+            report.push('');
+            report.push('3. Background images: Cannot guarantee text contrast over backgrounds.');
+            report.push('   Manual review recommended for slides with text over images.');
+            report.push('');
+            report.push('=== RECOMMENDATIONS ===');
+            report.push('- Test with screen readers (NVDA, JAWS, VoiceOver)');
+            report.push('- Verify keyboard navigation works for all content');
+            report.push('- Check color contrast with tools like WebAIM Contrast Checker');
+            report.push('- Test with high contrast mode enabled');
+            report.push('- Review with prefers-reduced-motion enabled');
+            report.push('- Validate with automated tools (axe, WAVE, Lighthouse)');
+            report.push('');
+            report.push('This converter generates WCAG-READY output with proper structure,');
+            report.push('semantics, and accessibility features. Final compliance depends on');
+            report.push('source content quality and manual verification.');
             
             if (summaryData.warnings.length > 0) {
                 report.push('');
-                report.push('=== WARNINGS ===');
+                report.push('=== PROCESSING WARNINGS ===');
                 summaryData.warnings.forEach(function(w) {
                     report.push('- ' + w);
                 });
