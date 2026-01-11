@@ -328,7 +328,7 @@
 
         <div class="preview" id="prev">
             <h3>Preview</h3>
-            <iframe id="iframe" sandbox="allow-same-origin allow-scripts" title="Preview of generated scrollytelling site"></iframe>
+            <iframe id="iframe" sandbox="allow-scripts" title="Preview of generated scrollytelling site"></iframe>
             <div style="margin-top: 1rem; display: flex; gap: 1rem;">
                 <button class="btn-sec" id="edit" style="flex: 1;">Edit</button>
                 <button class="btn-main" id="down" style="flex: 1;">Download</button>
@@ -359,7 +359,7 @@
         var drop = document.getElementById('drop');
         var inp = document.getElementById('file');
         var info = document.getElementById('info');
-        var status = document.getElementById('status');
+        const statusEl = document.getElementById('status');  // Use const to prevent shadowing
         var load = document.getElementById('load');
         var prev = document.getElementById('prev');
         var gen = document.getElementById('gen');
@@ -474,11 +474,11 @@
 
         function handleFile(f) {
             if (!f || !f.name.toLowerCase().endsWith('.pptx')) {
-                status.textContent = 'Please select a PPTX file';
-                status.className = 'msg show err';
+                statusEl.textContent = 'Please select a PPTX file';
+                statusEl.className = 'msg show err';
                 // Set assertive for errors
-                status.setAttribute('aria-live', 'assertive');
-                status.setAttribute('role', 'alert');
+                statusEl.setAttribute('aria-live', 'assertive');
+                statusEl.setAttribute('role', 'alert');
                 announceToScreenReader('Error: Please select a PPTX file');
                 return;
             }
@@ -486,11 +486,11 @@
             info.textContent = '✓ ' + f.name;
             info.style.display = 'block';
             gen.disabled = false;
-            status.textContent = 'Ready to process';
-            status.className = 'msg show ok';
+            statusEl.textContent = 'Ready to process';
+            statusEl.className = 'msg show ok';
             // Return to polite status for non-errors
-            status.setAttribute('aria-live', 'polite');
-            status.setAttribute('role', 'status');
+            statusEl.setAttribute('aria-live', 'polite');
+            statusEl.setAttribute('role', 'status');
             announceToScreenReader('File loaded successfully: ' + f.name);
         }
 
@@ -603,22 +603,22 @@
                 load.style.display = 'none';
                 gen.disabled = false;
                 cancelBtn.disabled = true;
-                status.textContent = 'Site generated successfully';
-                status.className = 'msg show ok';
+                statusEl.textContent = 'Site generated successfully';
+                statusEl.className = 'msg show ok';
                 // Return to polite status for non-errors
-                status.setAttribute('aria-live', 'polite');
-                status.setAttribute('role', 'status');
+                statusEl.setAttribute('aria-live', 'polite');
+                statusEl.setAttribute('role', 'status');
                 announceToScreenReader('Site generated successfully. Preview is ready.');
                 
                 updateSummary();
                 
             } catch (e) {
                 summaryData.errors.push(e.message);
-                status.textContent = 'Error: ' + e.message;
-                status.className = 'msg show err';
+                statusEl.textContent = 'Error: ' + e.message;
+                statusEl.className = 'msg show err';
                 // Set assertive for errors
-                status.setAttribute('aria-live', 'assertive');
-                status.setAttribute('role', 'alert');
+                statusEl.setAttribute('aria-live', 'assertive');
+                statusEl.setAttribute('role', 'alert');
                 load.style.display = 'none';
                 gen.disabled = false;
                 cancelBtn.disabled = true;
@@ -1561,11 +1561,11 @@
                 announceToScreenReader('Download complete');
                 
             } catch (e) {
-                status.textContent = 'Download error: ' + e.message;
-                status.className = 'msg show err';
+                statusEl.textContent = 'Download error: ' + e.message;
+                statusEl.className = 'msg show err';
                 // Set assertive for errors
-                status.setAttribute('aria-live', 'assertive');
-                status.setAttribute('role', 'alert');
+                statusEl.setAttribute('aria-live', 'assertive');
+                statusEl.setAttribute('role', 'alert');
                 down.disabled = false;
                 announceToScreenReader('Download failed');
             }
@@ -1583,11 +1583,11 @@
             load.style.display = 'none';
             gen.disabled = false;
             cancelBtn.disabled = true;
-            status.textContent = 'Processing cancelled';
-            status.className = 'msg show warn';
+            statusEl.textContent = 'Processing cancelled';
+            statusEl.className = 'msg show warn';
             // Return to polite status for warnings
-            status.setAttribute('aria-live', 'polite');
-            status.setAttribute('role', 'status');
+            statusEl.setAttribute('aria-live', 'polite');
+            statusEl.setAttribute('role', 'status');
         }
 
         // Edit button
@@ -1604,7 +1604,7 @@
             info.style.display = 'none';
             gen.disabled = true;
             cancelBtn.disabled = true;
-            status.classList.remove('show');
+            statusEl.classList.remove('show');
             prev.classList.remove('show');
             summary.classList.remove('show');
             titleinp.value = 'Driving Meaningful Health Change';
