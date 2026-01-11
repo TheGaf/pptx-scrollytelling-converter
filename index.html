@@ -655,7 +655,9 @@
                             }
                             imageRefs.push({
                                 rId: embedAttr,
-                                area: cx * cy  // Calculate area for heuristic
+                                area: cx * cy,  // Calculate area for heuristic
+                                cx: cx,
+                                cy: cy
                             });
                         }
                     }
@@ -741,27 +743,52 @@
                         loadedImages.push({
                             data: 'data:' + mimeType + ';base64,' + imageData,
                             rId: refId,
-                            area: area
+                            area: area,
+                            cx: imageRefs[i].cx || 0,
+                            cy: imageRefs[i].cy || 0
                         });
                     } else {
                         summaryData.warnings.push('Slide ' + slideNum + ': Image file not found: ' + imagePath);
                     }
                 }
                 
-                // Choose background image: largest area wins, fallback to first if no extents
+                // Choose background image: use aspect ratio similarity + area heuristic
                 if (loadedImages.length > 0) {
-                    var maxArea = 0;
+                    // Standard slide aspect ratio is 16:9 (1.7778) or 4:3 (1.3333)
+                    // We'll use 16:9 as default target
+                    var targetAspectRatio = 16 / 9;
+                    var bestScore = -1;
                     var backgroundIndex = 0;
                     var hasExtents = false;
+                    var selectionReason = '';
                     
                     for (var i = 0; i < loadedImages.length; i++) {
                         if (loadedImages[i].area > 0) {
                             hasExtents = true;
-                            if (loadedImages[i].area > maxArea) {
-                                maxArea = loadedImages[i].area;
+                            // Calculate aspect ratio from cx and cy
+                            var imageAspectRatio = loadedImages[i].cx / loadedImages[i].cy;
+                            var aspectDiff = Math.abs(imageAspectRatio - targetAspectRatio);
+                            
+                            // Score: prefer images with aspect ratio closer to slide AND larger area
+                            // Lower aspect difference is better, higher area is better
+                            // Normalize scores so aspect ratio has more weight
+                            var aspectScore = 1 / (1 + aspectDiff);  // Closer to 1 is better
+                            var areaScore = loadedImages[i].area;
+                            
+                            // Combined score: aspect ratio weighted more heavily
+                            var score = (aspectScore * 1000000) + (areaScore * 0.1);
+                            
+                            if (score > bestScore) {
+                                bestScore = score;
                                 backgroundIndex = i;
+                                selectionReason = 'aspect-ratio-and-area';
                             }
                         }
+                    }
+                    
+                    // Fallback if no extents: use first image
+                    if (!hasExtents) {
+                        selectionReason = 'first-image-fallback';
                     }
                     
                     // Mark the chosen background
@@ -769,7 +796,8 @@
                         images.push({
                             data: loadedImages[i].data,
                             rId: loadedImages[i].rId,
-                            isBackground: i === backgroundIndex
+                            isBackground: i === backgroundIndex,
+                            selectionReason: i === backgroundIndex ? selectionReason : ''
                         });
                     }
                     
@@ -777,7 +805,7 @@
                     if (!summaryData.backgroundHeuristic) {
                         summaryData.backgroundHeuristic = {};
                     }
-                    summaryData.backgroundHeuristic[slideNum] = hasExtents ? 'largest-extent' : 'first-image';
+                    summaryData.backgroundHeuristic[slideNum] = selectionReason;
                 }
                 
                 // Add note if no images were resolved
@@ -795,6 +823,39 @@
         function parseSlideText(xml) {
             var parser = new DOMParser();
             var doc = parser.parseFromString(xml, 'text/xml');
+            
+            // First, try to find title placeholder text
+            // Look for p:sp elements with p:ph type="title" or "ctrTitle"
+            var titleText = '';
+            var titleSource = '';
+            var shapes = doc.getElementsByTagName('p:sp');
+            
+            for (var i = 0; i < shapes.length; i++) {
+                var shape = shapes[i];
+                var phElements = shape.getElementsByTagName('p:ph');
+                
+                for (var j = 0; j < phElements.length; j++) {
+                    var phType = phElements[j].getAttribute('type');
+                    if (phType === 'title' || phType === 'ctrTitle') {
+                        // Extract text from this shape
+                        var txBodyElements = shape.getElementsByTagName('p:txBody');
+                        if (txBodyElements.length > 0) {
+                            var textElements = txBodyElements[0].getElementsByTagName('a:t');
+                            var extractedText = '';
+                            for (var k = 0; k < textElements.length; k++) {
+                                extractedText += textElements[k].textContent;
+                            }
+                            extractedText = extractedText.trim();
+                            if (extractedText) {
+                                titleText = extractedText;
+                                titleSource = 'title-placeholder';
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (titleText) break;
+            }
             
             // Get all paragraph elements (a:p or p)
             var aParagraphs = doc.getElementsByTagName('a:p');
@@ -863,18 +924,28 @@
             
             var result = {
                 heading: '',
+                headingSource: '',
                 content: []
             };
             
-            // First non-bullet paragraph becomes heading
-            for (var i = 0; i < paragraphs.length; i++) {
-                if (!paragraphs[i].isBullet && paragraphs[i].text) {
-                    result.heading = paragraphs[i].text;
-                    // Rest becomes content
-                    for (var j = i + 1; j < paragraphs.length; j++) {
-                        result.content.push(paragraphs[j]);
+            // Use title placeholder if found
+            if (titleText) {
+                result.heading = titleText;
+                result.headingSource = titleSource;
+                // All paragraphs become content
+                result.content = paragraphs;
+            } else {
+                // Fallback: First non-bullet paragraph becomes heading
+                for (var i = 0; i < paragraphs.length; i++) {
+                    if (!paragraphs[i].isBullet && paragraphs[i].text) {
+                        result.heading = paragraphs[i].text;
+                        result.headingSource = 'first-non-bullet';
+                        // Rest becomes content
+                        for (var j = i + 1; j < paragraphs.length; j++) {
+                            result.content.push(paragraphs[j]);
+                        }
+                        break;
                     }
-                    break;
                 }
             }
             
@@ -897,10 +968,22 @@
                 var slide = slides[i];
                 var bgStyle = '';
                 var inlineImages = '';
+                var bgComment = '';
+                var headingComment = '';
                 
                 if (slide.images.length > 0) {
                     var bgImage = slide.images.find(function(img) { return img.isBackground; }) || slide.images[0];
                     bgStyle = 'background-image: url(' + bgImage.data + '); background-size: cover; background-position: center;';
+                    
+                    // Generate comment explaining background selection
+                    var bgReason = bgImage.selectionReason || 'unknown';
+                    if (bgReason === 'aspect-ratio-and-area') {
+                        bgComment = '<!-- BACKGROUND IMAGE: This image was automatically chosen as the background because it has an aspect ratio similar to a standard slide (16:9) and is one of the larger images. If this doesn\'t look right, you can swap it with another image or remove it entirely. -->\n        ';
+                    } else if (bgReason === 'first-image-fallback') {
+                        bgComment = '<!-- BACKGROUND IMAGE: This image was chosen as the background by default (it appeared first in the slide). You may want to review this choice and swap it with a different image if needed. -->\n        ';
+                    } else {
+                        bgComment = '<!-- BACKGROUND IMAGE: This image is displayed as the background for this section. You can safely change or remove it if desired. -->\n        ';
+                    }
                     
                     var additionalImages = slide.images.slice(1);
                     additionalImages.forEach(function(img, idx) {
@@ -914,12 +997,23 @@
                         } else {
                             altText = 'Image ' + (idx + 1) + ' from slide ' + (i + 1);
                         }
-                        inlineImages += '<img src="' + img.data + '" alt="' + altText + '" loading="lazy" style="max-width: 100%; height: auto; margin: 1rem 0; border-radius: 0.5rem;">';
+                        inlineImages += '<!-- INLINE IMAGE: This image appears within the content. The alt text describes what the image shows for accessibility. You can edit the alt text or image if needed. -->\n          <img src="' + img.data + '" alt="' + altText + '" loading="lazy" style="max-width: 100%; height: auto; margin: 1rem 0; border-radius: 0.5rem;">\n          ';
                     });
                 }
                 
                 var heading = slide.text.heading ? '<h2>' + escapeHtml(slide.text.heading) + '</h2>' : '';
                 var content = '';
+                
+                // Generate heading comment explaining how it was chosen
+                if (slide.text.heading) {
+                    if (slide.text.headingSource === 'title-placeholder') {
+                        headingComment = '<!-- HEADING: This heading was automatically extracted from the slide\'s title placeholder. You can safely edit this text to better describe this section. -->\n          ';
+                    } else if (slide.text.headingSource === 'first-non-bullet') {
+                        headingComment = '<!-- HEADING: This heading was inferred from the first non-bullet text found on the slide. Please verify this is the correct heading for this section and edit if needed. -->\n          ';
+                    } else {
+                        headingComment = '<!-- HEADING: This is the main heading for this section. You can safely edit this text. -->\n          ';
+                    }
+                }
                 
                 // Generate stable ID for heading and aria-labelledby for section
                 var slideId = 'slide-' + (i + 1) + '-title';
@@ -956,7 +1050,8 @@
                 }
                 
                 // Build section with aria-labelledby if heading exists
-                secs += '<section' + ariaLabel + ' style="' + bgStyle + '"><div class="ov"></div><div class="con">' + heading + content + inlineImages + '</div></section>';
+                var sectionComment = '<!-- SECTION ' + (i + 1) + ': This is one slide from your presentation. You can safely edit the text content inside this section. The background image and styling are controlled by the inline styles. -->\n      ';
+                secs += sectionComment + bgComment + '<section' + ariaLabel + ' style="' + bgStyle + '">\n        <div class="ov"></div>\n        <div class="con">\n          ' + headingComment + heading + '\n          <!-- CONTENT: The paragraphs and lists below were extracted from your slide. You can edit, add, or remove any of this content. -->\n          ' + content + inlineImages + '\n        </div>\n      </section>\n      ';
             }
 
             // Check if any slides have text over background images
@@ -978,7 +1073,38 @@
 
             var accessibilityReport = generateAccessibilityReport(slides, hasTextOverBackground);
             
-            var result = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + escapeHtml(titleinp.value) + '</title><link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><a href="#main" class="skip-link">Skip to main content</a><button class="contrast-toggle" id="contrastBtn" aria-label="Toggle high contrast mode">High Contrast</button><div class="pb" id="pb"></div><header id="hero"><div class="ov"></div><div class="con"><div class="hc"><h1>' + escapeHtml(titleinp.value) + '</h1><p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p></div></div></header><main id="main">' + secs + '</main><footer><p>' + escapeHtml(copyinp.value) + '</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"});document.getElementById("contrastBtn").addEventListener("click",function(){var isHigh=document.body.getAttribute("data-contrast")==="high";if(isHigh){document.body.removeAttribute("data-contrast");this.textContent="High Contrast";}else{document.body.setAttribute("data-contrast","high");this.textContent="Normal Contrast";}});<\/script></body></html>';
+            // Build comprehensive commented HTML for non-engineers
+            var htmlComments = '<!--\n' +
+                '  SCROLLYTELLING SITE - AUTO-GENERATED FROM POWERPOINT\n' +
+                '  \n' +
+                '  HOW TO EDIT THIS FILE:\n' +
+                '  - You can safely change any text content between HTML tags\n' +
+                '  - Each section represents one slide from your presentation\n' +
+                '  - Images are embedded as data URLs (they won\'t break if you move this file)\n' +
+                '  - The CSS in the <style> tag controls colors, fonts, and layout\n' +
+                '  - The JavaScript at the bottom makes the scroll progress bar and contrast toggle work\n' +
+                '  \n' +
+                '  IMPORTANT NOTES:\n' +
+                '  - Some headings were automatically detected - please verify they\'re correct\n' +
+                '  - Background images were chosen automatically - you may want to adjust them\n' +
+                '  - Alt text for images was generated - please review for accuracy\n' +
+                '  - This site follows WCAG accessibility guidelines but final compliance depends on your content\n' +
+                '-->\n';
+            
+            var cssComments = '/* \n' +
+                '   STYLING - You can edit colors, fonts, and spacing here\n' +
+                '   \n' +
+                '   Color Variables (at the top):\n' +
+                '   --p: Primary color for accents\n' +
+                '   --s: Secondary color for gradients\n' +
+                '   --b1 and --b2: Background gradient colors\n' +
+                '   \n' +
+                '   To change colors, find the :root section and update the color values.\n' +
+                '   To change fonts, find "font-family" and replace "Titillium Web" with your preferred font.\n' +
+                '   To adjust spacing, look for "margin" and "padding" values.\n' +
+                '*/ \n';
+            
+            var result = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width">\n  <title>' + escapeHtml(titleinp.value) + '</title>\n  <!-- Web Font: You can change this to a different Google Font if desired -->\n  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet">\n  <style>\n    ' + cssComments + css + '\n  </style>\n</head>\n<body>\n  ' + htmlComments + '\n  <!-- SKIP LINK: Allows keyboard users to jump directly to content -->\n  <a href="#main" class="skip-link">Skip to main content</a>\n  \n  <!-- HIGH CONTRAST TOGGLE: Clicking this button switches to a black/white color scheme for better visibility -->\n  <button class="contrast-toggle" id="contrastBtn" aria-label="Toggle high contrast mode">High Contrast</button>\n  \n  <!-- PROGRESS BAR: Shows scroll progress as you move down the page -->\n  <div class="pb" id="pb"></div>\n  \n  <!-- HERO SECTION: The opening section of your scrollytelling site -->\n  <!-- You can edit the title and tagline below -->\n  <header id="hero">\n    <div class="ov"></div>\n    <div class="con">\n      <div class="hc">\n        <h1>' + escapeHtml(titleinp.value) + '</h1>\n        <p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p>\n      </div>\n    </div>\n  </header>\n  \n  <!-- MAIN CONTENT: Your slides appear below as sections -->\n  <main id="main">\n      ' + secs + '\n  </main>\n  \n  <!-- FOOTER: You can edit the copyright text below -->\n  <footer>\n    <p>' + escapeHtml(copyinp.value) + '</p>\n  </footer>\n  \n  <!-- JAVASCRIPT: Makes the interactive features work -->\n  <!-- The scroll progress bar updates as you scroll -->\n  <!-- The contrast toggle button switches between normal and high contrast modes -->\n  <script>\n    window.addEventListener("scroll", function() {\n      var scrolled = window.scrollY;\n      var height = document.documentElement.scrollHeight - window.innerHeight;\n      document.getElementById("pb").style.width = (scrolled / height * 100) + "%";\n    });\n    \n    document.getElementById("contrastBtn").addEventListener("click", function() {\n      var isHigh = document.body.getAttribute("data-contrast") === "high";\n      if (isHigh) {\n        document.body.removeAttribute("data-contrast");\n        this.textContent = "High Contrast";\n      } else {\n        document.body.setAttribute("data-contrast", "high");\n        this.textContent = "Normal Contrast";\n      }\n    });\n  <\/script>\n</body>\n</html>';
 
             return result;
         }
@@ -1047,21 +1173,26 @@
             report.push('- Content readability and clarity');
             report.push('');
             report.push('=== LIMITATIONS DOCUMENTED ===');
-            report.push('1. Background image selection: Uses largest picture extent heuristic.');
+            report.push('1. Heading detection: Attempts to find title placeholders first.');
+            report.push('   - Searches for p:ph elements with type="title" or "ctrTitle"');
+            report.push('   - Falls back to first non-bullet paragraph if no title placeholder found');
+            report.push('   - Please verify all headings are correct and meaningful');
+            report.push('');
+            report.push('2. Background image selection: Uses aspect ratio + area heuristic.');
             
             // Add details about which heuristic was used per slide
             if (summaryData.backgroundHeuristic) {
-                var usedLargestExtent = false;
+                var usedAspectRatio = false;
                 var usedFirstImage = false;
                 for (var slideNum in summaryData.backgroundHeuristic) {
-                    if (summaryData.backgroundHeuristic[slideNum] === 'largest-extent') {
-                        usedLargestExtent = true;
+                    if (summaryData.backgroundHeuristic[slideNum] === 'aspect-ratio-and-area') {
+                        usedAspectRatio = true;
                     } else {
                         usedFirstImage = true;
                     }
                 }
-                if (usedLargestExtent) {
-                    report.push('   Most slides: Background chosen by largest picture extent (cx * cy).');
+                if (usedAspectRatio) {
+                    report.push('   Most slides: Background chosen by aspect ratio similarity (16:9) + area.');
                 }
                 if (usedFirstImage) {
                     report.push('   Some slides: Fallback to first image when extents unavailable.');
@@ -1070,11 +1201,11 @@
                 report.push('   Fallback to first referenced image when extents unavailable.');
             }
             report.push('');
-            report.push('2. Bullet detection: Uses paragraph properties (a:pPr, a:buChar,');
+            report.push('3. Bullet detection: Uses paragraph properties (a:pPr, a:buChar,');
             report.push('   a:buAutoNum) when available. Falls back to Unicode bullet character');
             report.push('   detection for plain text paragraphs.');
             report.push('');
-            report.push('3. Background images: Cannot guarantee text contrast over backgrounds.');
+            report.push('4. Background images: Cannot guarantee text contrast over backgrounds.');
             report.push('   Manual review recommended for slides with text over images.');
             report.push('');
             report.push('=== RECOMMENDATIONS ===');
