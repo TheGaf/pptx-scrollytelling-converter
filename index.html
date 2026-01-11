@@ -433,8 +433,7 @@
                         slideFile.async('string').then(function(xml) {
                             var parser = new DOMParser();
                             var doc = parser.parseFromString(xml, 'text/xml');
-                            // Use a\\:t to properly escape the colon in the namespace selector
-                            var texts = doc.querySelectorAll('a\\:t, t');
+                            var texts = doc.querySelectorAll('a:t');
                             var txt = '';
                             texts.forEach(function(t) { 
                                 txt += escapeHtml(t.textContent) + ' '; 
