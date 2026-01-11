@@ -277,10 +277,14 @@
             var promises = [];
             Object.keys(mediaFolder.files).forEach(function(filename) {
                 if (filename.match(/\.(png|jpg|jpeg|gif)$/i)) {
+                    // Handle individual image failures gracefully
                     var promise = mediaFolder.file(filename).async('base64').then(function(data) {
                         var ext = filename.split('.').pop().toLowerCase();
                         var mime = ext === 'png' ? 'image/png' : 'image/jpeg';
                         images[filename] = 'data:' + mime + ';base64,' + data;
+                    }).catch(function(err) {
+                        // Log error but continue with other images
+                        console.warn('Failed to extract image ' + filename + ':', err);
                     });
                     promises.push(promise);
                 }
@@ -360,30 +364,41 @@
                         return;
                     }
 
-                    // Extract theme data
-                    var themePromise = z.file('ppt/theme/theme1.xml');
-                    var themeFonts = null;
-                    var themeColors = null;
+                    // Extract theme data as a promise
+                    var themeFile = z.file('ppt/theme/theme1.xml');
+                    var themePromise;
                     
-                    if (themePromise) {
-                        themePromise.async('string').then(function(themeXml) {
-                            themeFonts = extractFonts(themeXml);
-                            themeColors = extractColors(themeXml);
+                    if (themeFile) {
+                        themePromise = themeFile.async('string').then(function(themeXml) {
+                            return {
+                                fonts: extractFonts(themeXml),
+                                colors: extractColors(themeXml)
+                            };
                         }).catch(function() {
                             // Use defaults if theme extraction fails
-                            themeFonts = { title: fontFallbacks.default, body: fontFallbacks.default };
-                            themeColors = themes[theme];
+                            return {
+                                fonts: { title: fontFallbacks.default, body: fontFallbacks.default },
+                                colors: themes[theme]
+                            };
+                        });
+                    } else {
+                        // No theme file found, use defaults
+                        themePromise = Promise.resolve({
+                            fonts: { title: fontFallbacks.default, body: fontFallbacks.default },
+                            colors: themes[theme]
                         });
                     }
 
-                    // Extract images
-                    extractImages(z).then(function(images) {
+                    // Extract images and theme in parallel
+                    Promise.all([extractImages(z), themePromise]).then(function(results) {
+                        var images = results[0];
+                        var themeData = results[1];
+                        
                         var slides = [];
                         var files = Object.keys(slideFolder.files).filter(function(f) { 
                             return f.match(/slide\d+\.xml$/); 
                         }).sort();
                         
-                        var count = 0;
                         var slidePromises = [];
                         
                         files.forEach(function(f, idx) {
@@ -406,6 +421,8 @@
                                 };
                                 
                                 // Extract titles and content
+                                // Note: Using escaped colons for XML namespace prefixes (p:sp, a:t, etc.)
+                                // PowerPoint uses 'p:' for presentation and 'a:' for drawing namespaces
                                 var shapes = doc.querySelectorAll('p\\:sp, sp');
                                 var isFirstText = true;
                                 
@@ -428,16 +445,21 @@
                                         }
                                     }
                                     
-                                    // Extract inline images
+                                    // Extract inline images with context-aware alt text
                                     var blips = shape.querySelectorAll('a\\:blip, blip');
                                     blips.forEach(function(blip) {
                                         var embedId = blip.getAttribute('r:embed') || blip.getAttribute('embed');
                                         if (embedId && rels[embedId]) {
                                             var imgPath = 'ppt/' + rels[embedId];
                                             if (images[imgPath]) {
+                                                // Try to find nearby text for better alt text
+                                                var altText = 'Image from slide ' + slideNum;
+                                                if (slideData.title) {
+                                                    altText = 'Image: ' + slideData.title;
+                                                }
                                                 slideData.images.push({
                                                     src: images[imgPath],
-                                                    alt: 'Slide ' + slideNum + ' image'
+                                                    alt: altText
                                                 });
                                             }
                                         }
@@ -463,19 +485,13 @@
                         });
                         
                         Promise.all(slidePromises).then(function() {
-                            // Wait a bit for theme extraction
-                            setTimeout(function() {
-                                var fonts = themeFonts || { title: fontFallbacks.default, body: fontFallbacks.default };
-                                var colors = themeColors || themes[theme];
-                                
-                                html = makeHTML(slides, fonts, colors, images);
-                                iframe.srcdoc = html;
-                                prev.classList.add('show');
-                                load.style.display = 'none';
-                                gen.disabled = false;
-                                status.textContent = 'Preview ready';
-                                status.className = 'msg show ok';
-                            }, 300);
+                            html = makeHTML(slides, themeData.fonts, themeData.colors, images);
+                            iframe.srcdoc = html;
+                            prev.classList.add('show');
+                            load.style.display = 'none';
+                            gen.disabled = false;
+                            status.textContent = 'Preview ready';
+                            status.className = 'msg show ok';
                         });
                     }).catch(function(e) {
                         status.textContent = 'Error: ' + e.message;
@@ -520,7 +536,7 @@
                 
                 // Add inline images
                 slide.images.forEach(function(img) {
-                    contentHtml += '<img src="' + img.src + '" alt="' + escapeHtml(img.alt) + '" style="max-width: 100%; height: auto; margin: 1rem 0; border-radius: 0.5rem;">';
+                    contentHtml += '<img src="' + img.src + '" alt="' + escapeHtml(img.alt) + '" class="slide-img">';
                 });
                 
                 // If no content, add placeholder
@@ -528,6 +544,7 @@
                     contentHtml = '<h2>Section ' + (i+1) + '</h2><p>Content from slide ' + (i+1) + '</p>';
                 }
                 
+                // Add background image as inline style (necessary for dynamic content)
                 secs += '<section ' + bgStyle + '><div class="ov"></div><div class="con">' + contentHtml + '</div></section>';
             }
 
@@ -656,6 +673,15 @@
             css += '  font-size: 1.1rem;\n';
             css += '  color: rgba(255, 255, 255, 0.8);\n';
             css += '  margin-bottom: var(--spacing-md);\n';
+            css += '}\n\n';
+            
+            css += '/* Images from slides */\n';
+            css += '.slide-img {\n';
+            css += '  max-width: 100%;\n';
+            css += '  height: auto;\n';
+            css += '  margin: var(--spacing-md) 0;\n';
+            css += '  border-radius: 0.5rem;\n';
+            css += '  display: block;\n';
             css += '}\n\n';
             
             css += '/* Overlay for readability */\n';
