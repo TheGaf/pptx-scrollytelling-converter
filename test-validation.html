@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Module A Parser Validation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="pptx-parser.js"></script>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #ccc;
+        }
+        .test.pass {
+            border-color: #4caf50;
+        }
+        .test.fail {
+            border-color: #f44336;
+        }
+        .test h3 {
+            margin: 0 0 10px 0;
+        }
+        .pass h3::before {
+            content: "✓ ";
+            color: #4caf50;
+        }
+        .fail h3::before {
+            content: "✗ ";
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>Module A Parser Validation Tests</h1>
+    <div id="results"></div>
+
+    <script>
+        var results = document.getElementById('results');
+        var tests = [];
+
+        function addTest(name, passed, message) {
+            tests.push({ name: name, passed: passed, message: message });
+            var div = document.createElement('div');
+            div.className = 'test ' + (passed ? 'pass' : 'fail');
+            div.innerHTML = '<h3>' + name + '</h3><p>' + message + '</p>';
+            results.appendChild(div);
+        }
+
+        // Test 1: Check if PPTXParser is defined
+        if (typeof PPTXParser !== 'undefined') {
+            addTest('Parser Module Loading', true, 'PPTXParser object is defined and loaded successfully.');
+        } else {
+            addTest('Parser Module Loading', false, 'PPTXParser object is not defined.');
+        }
+
+        // Test 2: Check if parse method exists
+        if (typeof PPTXParser.parse === 'function') {
+            addTest('Parse Method', true, 'PPTXParser.parse() method is available.');
+        } else {
+            addTest('Parse Method', false, 'PPTXParser.parse() method is missing.');
+        }
+
+        // Test 3: Check version
+        if (PPTXParser.version) {
+            addTest('Version Info', true, 'Module version: ' + PPTXParser.version);
+        } else {
+            addTest('Version Info', false, 'Version information not available.');
+        }
+
+        // Test 4: Check JSZip dependency
+        if (typeof JSZip !== 'undefined') {
+            addTest('JSZip Dependency', true, 'JSZip library is loaded and available.');
+        } else {
+            addTest('JSZip Dependency', false, 'JSZip library is not loaded.');
+        }
+
+        // Test 5: Create mock PPTX structure to test parser
+        var mockPresentationXml = '<?xml version="1.0"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldSz cx="9144000" cy="6858000"/></p:presentation>';
+        
+        var mockThemeXml = '<?xml version="1.0"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:clrScheme><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2></a:clrScheme></a:themeElements></a:theme>';
+
+        var mockSlideXml = '<?xml version="1.0"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:rPr sz="4400" b="1"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="Calibri"/></a:rPr><a:t>Test Title</a:t></a:r></a:p></p:txBody><p:spPr><a:xfrm><a:off x="1000000" y="1000000"/><a:ext cx="8000000" cy="2000000"/></a:xfrm><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></p:spPr></p:sp></p:spTree></p:cSld></p:sld>';
+
+        // Test 6: Test with mock PPTX
+        var zip = new JSZip();
+        zip.file('ppt/presentation.xml', mockPresentationXml);
+        zip.file('ppt/theme/theme1.xml', mockThemeXml);
+        zip.file('ppt/slides/slide1.xml', mockSlideXml);
+
+        PPTXParser.parse(zip).then(function(data) {
+            // Test dimensions extraction
+            if (data.dimensions && data.dimensions.width === 9144000) {
+                addTest('Dimensions Extraction', true, 'Width: ' + data.dimensions.widthPx + 'px, Height: ' + data.dimensions.heightPx + 'px');
+            } else {
+                addTest('Dimensions Extraction', false, 'Failed to extract slide dimensions correctly.');
+            }
+
+            // Test theme colors extraction
+            if (data.themeColors && data.themeColors.accent1 === '#4472C4') {
+                addTest('Theme Colors Extraction', true, 'Accent1: ' + data.themeColors.accent1 + ', Accent2: ' + data.themeColors.accent2);
+            } else {
+                addTest('Theme Colors Extraction', false, 'Failed to extract theme colors correctly.');
+            }
+
+            // Test slide parsing
+            if (data.slides && data.slides.length === 1) {
+                addTest('Slide Parsing', true, 'Successfully parsed ' + data.slides.length + ' slide(s).');
+            } else {
+                addTest('Slide Parsing', false, 'Failed to parse slides correctly. Found: ' + (data.slides ? data.slides.length : 0));
+            }
+
+            // Test text runs extraction
+            if (data.slides[0] && data.slides[0].textRuns && data.slides[0].textRuns.length > 0) {
+                var textRun = data.slides[0].textRuns[0];
+                var details = 'Text: "' + textRun.text + '", Font: ' + textRun.fontFamily + ', Size: ' + textRun.fontSize + 'pt, Bold: ' + textRun.bold;
+                addTest('Text Runs Extraction', true, details);
+            } else {
+                addTest('Text Runs Extraction', false, 'Failed to extract text runs.');
+            }
+
+            // Test shapes extraction
+            if (data.slides[0] && data.slides[0].shapes && data.slides[0].shapes.length > 0) {
+                var shape = data.slides[0].shapes[0];
+                var details = 'Box: ' + shape.boundingBox.width + 'x' + shape.boundingBox.height + 'px, Fill: ' + shape.fillColor;
+                addTest('Shapes Extraction', true, details);
+            } else {
+                addTest('Shapes Extraction', false, 'Failed to extract shapes.');
+            }
+
+            // Test images extraction
+            if (data.slides[0] && data.slides[0].images !== undefined) {
+                addTest('Images Structure', true, 'Images array exists with ' + data.slides[0].images.length + ' items.');
+            } else {
+                addTest('Images Structure', false, 'Images array is missing.');
+            }
+
+            // Summary
+            var passed = tests.filter(function(t) { return t.passed; }).length;
+            var total = tests.length;
+            var summary = document.createElement('div');
+            summary.style.cssText = 'margin-top: 30px; padding: 20px; background: ' + (passed === total ? '#e8f5e9' : '#fff3e0') + '; border-radius: 8px;';
+            summary.innerHTML = '<h2>Summary: ' + passed + '/' + total + ' tests passed</h2><p>' + (passed === total ? '✓ All tests passed! Module A is ready.' : '⚠ Some tests failed. Review the results above.') + '</p>';
+            results.appendChild(summary);
+
+        }).catch(function(error) {
+            addTest('Parser Execution', false, 'Error during parsing: ' + error.message);
+            console.error('Parser error:', error);
+        });
+    </script>
+</body>
+</html>

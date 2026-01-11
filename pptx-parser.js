@@ -334,7 +334,7 @@ var PPTXParser = (function() {
         return new Promise(function(resolve, reject) {
             try {
                 var result = {
-                    dimensions: { width: 960, height: 720, widthPx: 960, heightPx: 720 },
+                    dimensions: { width: 9144000, height: 6858000, widthPx: 960, heightPx: 720 },
                     themeColors: {},
                     slides: []
                 };
