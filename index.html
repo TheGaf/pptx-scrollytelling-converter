@@ -280,24 +280,36 @@
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(themeXml, 'text/xml');
 
-                    var fontScheme = doc.querySelector('a\\:fontScheme');
+                    var fontScheme = doc.getElementsByTagName('fontScheme')[0];
                     if (fontScheme) {
-                        var majorFont = fontScheme.querySelector('a\\:majorFont > a\\:latin');
-                        var minorFont = fontScheme.querySelector('a\\:minorFont > a\\:latin');
-                        if (majorFont) data.fonts.primary = majorFont.getAttribute('typeface') || 'Roboto';
-                        if (minorFont) data.fonts.secondary = minorFont.getAttribute('typeface') || 'Roboto';
+                        var majorFonts = fontScheme.getElementsByTagName('majorFont');
+                        var minorFonts = fontScheme.getElementsByTagName('minorFont');
+                        if (majorFonts.length > 0) {
+                            var majorLatin = majorFonts[0].getElementsByTagName('latin')[0];
+                            if (majorLatin) data.fonts.primary = majorLatin.getAttribute('typeface') || 'Roboto';
+                        }
+                        if (minorFonts.length > 0) {
+                            var minorLatin = minorFonts[0].getElementsByTagName('latin')[0];
+                            if (minorLatin) data.fonts.secondary = minorLatin.getAttribute('typeface') || 'Roboto';
+                        }
                     }
 
-                    var colorScheme = doc.querySelector('a\\:clrScheme');
+                    var colorScheme = doc.getElementsByTagName('clrScheme')[0];
                     if (colorScheme) {
-                        var accent1 = colorScheme.querySelector('a\\:accent1 > a\\:srgbClr');
-                        var accent2 = colorScheme.querySelector('a\\:accent2 > a\\:srgbClr');
-                        if (accent1) data.colors.primary = '#' + accent1.getAttribute('val');
-                        if (accent2) data.colors.secondary = '#' + accent2.getAttribute('val');
+                        var accent1Elements = colorScheme.getElementsByTagName('accent1');
+                        var accent2Elements = colorScheme.getElementsByTagName('accent2');
+                        if (accent1Elements.length > 0) {
+                            var srgbClr1 = accent1Elements[0].getElementsByTagName('srgbClr')[0];
+                            if (srgbClr1) data.colors.primary = '#' + srgbClr1.getAttribute('val');
+                        }
+                        if (accent2Elements.length > 0) {
+                            var srgbClr2 = accent2Elements[0].getElementsByTagName('srgbClr')[0];
+                            if (srgbClr2) data.colors.secondary = '#' + srgbClr2.getAttribute('val');
+                        }
                     }
                 }
             } catch (e) {
-                addLog('Warning: Could not parse theme.xml', 'warn');
+                addLog('Warning: Could not parse theme.xml - ' + e.message, 'warn');
             }
 
             try {
