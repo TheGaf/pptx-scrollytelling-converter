@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="PPTX to Scrollytelling - Convert PowerPoint to responsive scrollytelling sites">
+    <meta name="description" content="PPTX to Scrollytelling - Convert PowerPoint to bespoke scrollytelling sites">
     <title>PPTX to Scrollytelling Converter</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -76,7 +76,6 @@
         .preview-iframe { width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 0.5rem; background: #fff; }
         @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
         @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } h1 { font-size: 1.8rem; } .preview-iframe { height: 400px; } }
-        @media (prefers-contrast: more) { body { background: #fff; } .box { border: 2px solid #000; } button { border: 2px solid #000; } }
     </style>
 </head>
 <body>
@@ -85,7 +84,7 @@
     <div class="container">
         <header>
             <h1>PPTX to Scrollytelling</h1>
-            <p class="subtitle">Transform your PowerPoint presentations into responsive, bespoke scrollytelling websites. All processing happens locally on your computer.</p>
+            <p class="subtitle">Transform your PowerPoint presentations into bespoke, responsive scrollytelling websites. Each conversion is unique to your deck's design.</p>
         </header>
 
         <main id="main">
@@ -103,19 +102,19 @@
                 </div>
 
                 <div class="box">
-                    <h2>Processing Summary</h2>
-                    <div class="summary" id="summary" role="region" aria-label="Processing summary">
+                    <h2>Design Analysis</h2>
+                    <div class="summary" id="summary" role="region" aria-label="Design analysis">
                         <div id="summaryContent"></div>
                     </div>
                     <div style="padding: 1rem; background: #f0f5ff; border-radius: 0.5rem; border-left: 4px solid #3b82f6; color: #1e40af; font-size: 0.9rem; margin-top: 1rem;">
-                        <strong>ℹ️ How it works:</strong> Upload a PPTX and the converter will extract fonts, colors, images, and content. The generated site will match your presentation's visual style.
+                        <strong>✨ Bespoke Design:</strong> The converter analyzes your deck's unique fonts, colors, layouts, and visual hierarchy to create a custom scrollytelling site.
                     </div>
                 </div>
             </div>
 
             <div id="loading" class="loading" role="status" aria-live="polite" aria-atomic="true">
                 <div class="spinner"></div>
-                <p id="loadingText">Processing your presentation...</p>
+                <p id="loadingText">Analyzing your presentation...</p>
             </div>
 
             <div class="preview" id="preview" role="region" aria-label="Generated site preview">
@@ -165,10 +164,14 @@
             'plex': 'IBM Plex Mono',
             'source': 'Source Sans 3',
             'lato': 'Lato',
-            'open sans': 'Open Sans',
+            'open': 'Open Sans',
             'poppins': 'Poppins',
             'raleway': 'Raleway',
-            'ubuntu': 'Ubuntu'
+            'ubuntu': 'Ubuntu',
+            'helvetica': 'Helvetica Neue',
+            'arial': 'Arial',
+            'georgia': 'Georgia',
+            'times': 'Times New Roman'
         };
 
         dropZone.addEventListener('click', function() { fileInput.click(); });
@@ -207,7 +210,7 @@
         }
 
         function updateSummary() {
-            var html = '<h3>Extraction Summary</h3>';
+            var html = '<h3>Design Analysis</h3>';
             for (var i = 0; i < processingLog.length; i++) {
                 var log = processingLog[i];
                 var prefix = log.type === 'warn' ? '⚠️' : log.type === 'err' ? '❌' : '✓';
@@ -223,44 +226,22 @@
         }
 
         function mapFont(fontName) {
-            if (!fontName) return 'Roboto';
+            if (!fontName) return 'Inter';
             var lower = fontName.toLowerCase();
             for (var key in fontMappings) {
                 if (lower.includes(key)) return fontMappings[key];
             }
-            return 'Roboto';
-        }
-
-        function generateSlideHTML(slide, index) {
-            var layout = slide.layout || 'section';
-            var content = escapeHtml(slide.text || '');
-            var heading = content.split('\n')[0] || 'Section ' + (index + 1);
-            var body = content.substring(heading.length).trim();
-
-            if (layout === 'hero') {
-                return '<section class="hero"><div class="overlay"></div><div class="section-content"><h1>' + heading + '</h1><p>' + body.substring(0, 100) + '</p></div></section>';
-            } else if (layout === 'split') {
-                return '<section class="split"><div class="section-content"><h2>' + heading + '</h2><p>' + body + '</p></div></section>';
-            } else if (layout === 'cardlist') {
-                var bullets = body.split('\n').filter(function(l) { return l.trim(); });
-                var html = '<section class="cardlist"><div class="section-content"><h2>' + heading + '</h2><ul>';
-                for (var i = 0; i < bullets.length; i++) {
-                    html += '<li>' + escapeHtml(bullets[i]) + '</li>';
-                }
-                html += '</ul></div></section>';
-                return html;
-            } else {
-                return '<section class="section"><div class="section-content"><h2>' + heading + '</h2><p>' + body.substring(0, 200) + '</p></div></section>';
-            }
+            return 'Inter';
         }
 
         function extractPPTXData(pptxZip) {
             var data = {
-                fonts: { primary: 'Roboto', secondary: 'Roboto' },
-                colors: { primary: '#0076BA', secondary: '#05A89D', background: '#ffffff', foreground: '#1a1a1a', muted: '#999999', border: '#dddddd' },
+                fonts: { primary: 'Inter', secondary: 'Inter' },
+                colors: { primary: '#0076BA', secondary: '#05A89D', background: '#ffffff', foreground: '#1a1a1a', accent: '#F9B900' },
                 slides: [],
                 images: [],
-                warnings: []
+                colorPalette: [],
+                designStyle: 'modern'
             };
 
             try {
@@ -268,24 +249,28 @@
                 if (themeFile) {
                     var themeXml = themeFile.asText();
                     
-                    // Extract fonts using regex
                     var majorFontMatch = themeXml.match(/<a:majorFont><a:latin typeface="([^"]+)"/);
                     var minorFontMatch = themeXml.match(/<a:minorFont><a:latin typeface="([^"]+)"/);
                     if (majorFontMatch) data.fonts.primary = mapFont(majorFontMatch[1]);
                     if (minorFontMatch) data.fonts.secondary = mapFont(minorFontMatch[1]);
                     
-                    // Extract colors using regex
                     var accent1Match = themeXml.match(/<a:accent1><a:srgbClr val="([0-9A-Fa-f]{6})"/);
                     var accent2Match = themeXml.match(/<a:accent2><a:srgbClr val="([0-9A-Fa-f]{6})"/);
+                    var accent3Match = themeXml.match(/<a:accent3><a:srgbClr val="([0-9A-Fa-f]{6})"/);
+                    var accent4Match = themeXml.match(/<a:accent4><a:srgbClr val="([0-9A-Fa-f]{6})"/);
+                    
                     if (accent1Match) data.colors.primary = '#' + accent1Match[1];
                     if (accent2Match) data.colors.secondary = '#' + accent2Match[1];
+                    if (accent3Match) data.colorPalette.push('#' + accent3Match[1]);
+                    if (accent4Match) { data.colors.accent = '#' + accent4Match[1]; data.colorPalette.push('#' + accent4Match[1]); }
                     
-                    addLog('Theme extracted: ' + data.fonts.primary + ', ' + data.colors.primary, 'info');
+                    addLog('Fonts: ' + data.fonts.primary + ' (primary), ' + data.fonts.secondary + ' (secondary)', 'info');
+                    addLog('Colors: ' + data.colors.primary + ', ' + data.colors.secondary, 'info');
                 } else {
                     addLog('No theme file found, using defaults', 'warn');
                 }
             } catch (e) {
-                addLog('Error parsing theme: ' + e.message, 'err');
+                addLog('Error parsing theme: ' + e.message, 'warn');
             }
 
             try {
@@ -302,19 +287,34 @@
                     for (var i = 0; i < slideFiles.length; i++) {
                         var slideFile = slideFiles[i];
                         var xmlContent = slideFolder.file(slideFile).asText();
-                        var parser = new DOMParser();
-                        var doc = parser.parseFromString(xmlContent, 'text/xml');
-
-                        var textNodes = doc.getElementsByTagName('a:t');
+                        
+                        var textNodes = xmlContent.match(/<a:t>([^<]+)<\/a:t>/g) || [];
                         var text = '';
                         for (var j = 0; j < textNodes.length; j++) {
-                            text += textNodes[j].textContent + ' ';
+                            text += textNodes[j].replace(/<a:t>|<\/a:t>/g, '') + ' ';
                         }
-
-                        var layout = i === 0 ? 'hero' : text.split('\n').length > 5 ? 'cardlist' : 'section';
-                        data.slides.push({ number: i + 1, text: text.trim(), layout: layout });
+                        
+                        var hasImage = xmlContent.includes('blip') || xmlContent.includes('image');
+                        var hasBackground = xmlContent.includes('solidFill') || xmlContent.includes('gradFill');
+                        var textLength = text.trim().length;
+                        var lineCount = text.split('\n').length;
+                        
+                        var layout = 'content';
+                        if (i === 0) layout = 'hero';
+                        else if (hasImage && textLength < 100) layout = 'image-focus';
+                        else if (lineCount > 5) layout = 'list';
+                        else if (textLength > 300) layout = 'text-heavy';
+                        
+                        data.slides.push({
+                            number: i + 1,
+                            text: text.trim(),
+                            layout: layout,
+                            hasImage: hasImage,
+                            hasBackground: hasBackground,
+                            textLength: textLength
+                        });
                     }
-                    addLog('Extracted ' + data.slides.length + ' slides', 'info');
+                    addLog('Analyzed ' + data.slides.length + ' slides with design detection', 'info');
                 } else {
                     addLog('No slides found', 'err');
                 }
@@ -325,16 +325,16 @@
             try {
                 var mediaFolder = pptxZip.folder('ppt/media');
                 if (mediaFolder) {
+                    var imageCount = 0;
                     mediaFolder.forEach(function(path, file) {
                         if (path.includes('.emf') || path.includes('.wmf')) {
                             addLog('Skipped EMF/WMF: ' + path, 'warn');
                         } else if (path.match(/\.(jpg|jpeg|png|gif)$/i)) {
                             data.images.push({ path: path, data: file });
+                            imageCount++;
                         }
                     });
-                    addLog('Found ' + data.images.length + ' images', 'info');
-                } else {
-                    addLog('No media folder found', 'info');
+                    if (imageCount > 0) addLog('Extracted ' + imageCount + ' images', 'info');
                 }
             } catch (e) {
                 addLog('Error extracting images: ' + e.message, 'warn');
@@ -343,16 +343,43 @@
             return data;
         }
 
-        function generateScrollytellingHTML(data) {
+        function generateBespokeHTML(data) {
             var sections = '';
+            var colorIndex = 0;
+            
             for (var i = 0; i < data.slides.length; i++) {
-                sections += generateSlideHTML(data.slides[i], i);
+                var slide = data.slides[i];
+                var bgColor = i % 2 === 0 ? data.colors.background : '#f8f9fa';
+                var textColor = i % 2 === 0 ? data.colors.foreground : data.colors.primary;
+                var accentColor = data.colorPalette[colorIndex % data.colorPalette.length] || data.colors.secondary;
+                colorIndex++;
+                
+                var heading = slide.text.split('\n')[0] || 'Section ' + (i + 1);
+                var body = slide.text.substring(heading.length).trim();
+                
+                if (slide.layout === 'hero') {
+                    sections += '<section class="hero" style="background:linear-gradient(135deg,' + data.colors.primary + ',#' + (parseInt(data.colors.primary.substring(1), 16) + 0x333333).toString(16).substring(0, 6) + ');color:#fff"><div class="section-content"><h1>' + escapeHtml(heading) + '</h1><p style="font-size:1.2rem;opacity:0.9">' + escapeHtml(body.substring(0, 100)) + '</p></div></section>';
+                } else if (slide.layout === 'image-focus') {
+                    sections += '<section class="image-focus" style="background:' + bgColor + ';border-left:6px solid ' + accentColor + '"><div class="section-content"><h2 style="color:' + data.colors.primary + '">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';margin-top:1rem">' + escapeHtml(body.substring(0, 150)) + '</p></div></section>';
+                } else if (slide.layout === 'list') {
+                    var bullets = body.split('\n').filter(function(l) { return l.trim(); });
+                    var listHtml = '<section class="list" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + data.colors.primary + ';border-bottom:3px solid ' + accentColor + ';padding-bottom:1rem">' + escapeHtml(heading) + '</h2><ul style="margin-left:2rem;margin-top:1.5rem">';
+                    for (var j = 0; j < Math.min(bullets.length, 5); j++) {
+                        listHtml += '<li style="margin-bottom:0.75rem;color:' + textColor + '"><span style="color:' + accentColor + ';font-weight:700">•</span> ' + escapeHtml(bullets[j]) + '</li>';
+                    }
+                    listHtml += '</ul></div></section>';
+                    sections += listHtml;
+                } else if (slide.layout === 'text-heavy') {
+                    sections += '<section class="text-heavy" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + data.colors.primary + ';margin-bottom:1.5rem">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';line-height:1.8;font-size:1.05rem">' + escapeHtml(body.substring(0, 300)) + '</p></div></section>';
+                } else {
+                    sections += '<section class="content" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + data.colors.primary + '">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';margin-top:1rem">' + escapeHtml(body.substring(0, 200)) + '</p></div></section>';
+                }
             }
 
             var googleFont = data.fonts.primary.replace(/ /g, '+');
-            var css = ':root{--primary:' + data.colors.primary + ';--secondary:' + data.colors.secondary + ';--background:' + data.colors.background + ';--foreground:' + data.colors.foreground + ';--muted:' + data.colors.muted + ';--border:' + data.colors.border + '}*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:"' + data.fonts.primary + '",-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:var(--background);color:var(--foreground);line-height:1.6}.progress-bar{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--primary),var(--secondary));z-index:1000;width:0;transition:width 0.3s ease}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 2rem}@media(min-width:1024px){section{min-height:100vh;padding:0 2rem}}section.hero{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;text-align:center}section.hero h1{font-size:clamp(2rem,8vw,4rem);margin-bottom:1rem}.section-content{max-width:1000px;margin:0 auto;width:100%;position:relative;z-index:10}h1,h2{font-weight:700;margin-bottom:1rem}h1{font-size:clamp(2rem,8vw,4rem)}h2{font-size:clamp(1.5rem,5vw,2.5rem)}p{font-size:1.1rem;margin-bottom:1rem}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.5rem}.overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:1}footer{padding:2rem;border-top:1px solid var(--border);text-align:center;color:var(--foreground);opacity:0.7}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}@media(max-width:768px){section{padding:72px 1rem}}';
+            var css = ':root{--primary:' + data.colors.primary + ';--secondary:' + data.colors.secondary + ';--accent:' + data.colors.accent + ';--bg:#fff;--text:' + data.colors.foreground + '}*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:"' + data.fonts.primary + '",-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}.progress-bar{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--primary),var(--secondary),var(--accent));z-index:1000;width:0;transition:width 0.3s ease}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 2rem}@media(min-width:1024px){section{min-height:100vh;padding:0 2rem}}section.hero{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;text-align:center}section.hero h1{font-size:clamp(2.5rem,8vw,4.5rem);margin-bottom:1rem;font-weight:800}section.hero p{font-size:clamp(1rem,3vw,1.5rem);opacity:0.95}.section-content{max-width:1000px;margin:0 auto;width:100%;position:relative;z-index:10}h1,h2{font-weight:700;margin-bottom:1rem}h1{font-size:clamp(2rem,8vw,4rem)}h2{font-size:clamp(1.5rem,5vw,2.5rem)}p{font-size:1.1rem;margin-bottom:1rem}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.75rem;list-style:none}li:before{content:"▸";margin-right:0.75rem;color:var(--secondary);font-weight:700}footer{padding:2rem;border-top:2px solid var(--primary);text-align:center;color:var(--text);opacity:0.7;font-size:0.9rem}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}@media(max-width:768px){section{padding:72px 1rem}}';
 
-            var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Scrollytelling</title><link href="https://fonts.googleapis.com/css2?family=' + googleFont + ':wght@400;600;700&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="progress-bar" id="pb"></div>' + sections + '<footer><p>Generated by PPTX to Scrollytelling Converter</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"})<\/script></body></html>';
+            var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + escapeHtml(data.slides[0].text.split('\n')[0] || 'Scrollytelling') + '</title><link href="https://fonts.googleapis.com/css2?family=' + googleFont + ':wght@400;600;700;800&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="progress-bar" id="pb"></div>' + sections + '<footer><p>Created with PPTX to Scrollytelling</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"})<\/script></body></html>';
 
             return html;
         }
@@ -368,34 +395,28 @@
                 assetsFolder.file(filename, img.data._data);
             }
 
-            var report = 'ACCESSIBILITY REPORT\n';
+            var report = 'BESPOKE DESIGN REPORT\n';
             report += '====================\n\n';
             report += 'Generated: ' + new Date().toISOString() + '\n\n';
-            report += 'THEME EXTRACTION\n';
+            report += 'DESIGN ANALYSIS\n';
             report += 'Primary Font: ' + data.fonts.primary + '\n';
             report += 'Secondary Font: ' + data.fonts.secondary + '\n';
             report += 'Primary Color: ' + data.colors.primary + '\n';
             report += 'Secondary Color: ' + data.colors.secondary + '\n';
-            report += 'Background: ' + data.colors.background + '\n';
-            report += 'Foreground: ' + data.colors.foreground + '\n\n';
-            report += 'CONTENT EXTRACTION\n';
-            report += 'Slides: ' + data.slides.length + '\n';
+            report += 'Accent Color: ' + data.colors.accent + '\n\n';
+            report += 'SLIDE ANALYSIS\n';
+            report += 'Total Slides: ' + data.slides.length + '\n';
+            for (var i = 0; i < data.slides.length; i++) {
+                report += 'Slide ' + (i + 1) + ': ' + data.slides[i].layout + ' layout\n';
+            }
+            report += '\nCONTENT EXTRACTION\n';
             report += 'Images: ' + data.images.length + '\n\n';
-            report += 'ACCESSIBILITY FEATURES\n';
-            report += '- WCAG 2.1 Level AA compliant\n';
-            report += '- Semantic HTML with proper landmarks\n';
-            report += '- Keyboard navigation support\n';
-            report += '- Focus visible styles\n';
-            report += '- prefers-reduced-motion support\n';
-            report += '- Responsive mobile-first design\n';
-            report += '- Color contrast validated\n';
-            report += '- Alt text for images\n\n';
             report += 'PROCESSING LOG\n';
             for (var i = 0; i < processingLog.length; i++) {
                 report += '[' + processingLog[i].type.toUpperCase() + '] ' + processingLog[i].message + '\n';
             }
 
-            zip.file('ACCESSIBILITY_REPORT.txt', report);
+            zip.file('DESIGN_REPORT.txt', report);
             return zip;
         }
 
@@ -410,11 +431,11 @@
             reader.onload = function(e) {
                 try {
                     JSZip.loadAsync(e.target.result).then(function(pptxZip) {
-                        loadingText.textContent = 'Extracting fonts and colors...';
+                        loadingText.textContent = 'Analyzing design and extracting content...';
                         extractedData = extractPPTXData(pptxZip);
 
-                        loadingText.textContent = 'Generating scrollytelling site...';
-                        generatedHTML = generateScrollytellingHTML(extractedData);
+                        loadingText.textContent = 'Generating bespoke scrollytelling site...';
+                        generatedHTML = generateBespokeHTML(extractedData);
 
                         loadingText.textContent = 'Creating download package...';
                         generatedZip = createOutputZip(extractedData);
@@ -426,9 +447,9 @@
                         previewIframe.srcdoc = generatedHTML;
                         preview.classList.add('show');
 
-                        showStatus('✓ Preview ready! Review and download below.', 'ok');
+                        showStatus('✓ Bespoke site generated! Review and download below.', 'ok');
                     }).catch(function(error) {
-                        console.error('JSZip error:', error);
+                        console.error('Error:', error);
                         loading.classList.remove('show');
                         generateBtn.disabled = false;
                         addLog('Fatal error: ' + error.message, 'err');
@@ -436,7 +457,7 @@
                         showStatus('Error: ' + error.message, 'err');
                     });
                 } catch (error) {
-                    console.error('FileReader error:', error);
+                    console.error('Error:', error);
                     loading.classList.remove('show');
                     generateBtn.disabled = false;
                     addLog('Fatal error: ' + error.message, 'err');
