@@ -292,7 +292,7 @@
                     </div>
                 </label>
                 <div class="file-info" id="info" role="status"></div>
-                <div class="msg" id="status" role="alert"></div>
+                <div class="msg" id="status" role="status" aria-live="polite" aria-atomic="true"></div>
                 <div class="summary-panel" id="summary">
                     <h4>Processing Summary</h4>
                     <ul id="summaryList"></ul>
@@ -473,9 +473,12 @@
         };
 
         function handleFile(f) {
-            if (!f || !f.name.endsWith('.pptx')) {
+            if (!f || !f.name.toLowerCase().endsWith('.pptx')) {
                 status.textContent = 'Please select a PPTX file';
                 status.className = 'msg show err';
+                // Set assertive for errors
+                status.setAttribute('aria-live', 'assertive');
+                status.setAttribute('role', 'alert');
                 announceToScreenReader('Error: Please select a PPTX file');
                 return;
             }
@@ -485,6 +488,9 @@
             gen.disabled = false;
             status.textContent = 'Ready to process';
             status.className = 'msg show ok';
+            // Return to polite status for non-errors
+            status.setAttribute('aria-live', 'polite');
+            status.setAttribute('role', 'status');
             announceToScreenReader('File loaded successfully: ' + f.name);
         }
 
@@ -599,6 +605,9 @@
                 cancelBtn.disabled = true;
                 status.textContent = 'Site generated successfully';
                 status.className = 'msg show ok';
+                // Return to polite status for non-errors
+                status.setAttribute('aria-live', 'polite');
+                status.setAttribute('role', 'status');
                 announceToScreenReader('Site generated successfully. Preview is ready.');
                 
                 updateSummary();
@@ -607,6 +616,9 @@
                 summaryData.errors.push(e.message);
                 status.textContent = 'Error: ' + e.message;
                 status.className = 'msg show err';
+                // Set assertive for errors
+                status.setAttribute('aria-live', 'assertive');
+                status.setAttribute('role', 'alert');
                 load.style.display = 'none';
                 gen.disabled = false;
                 cancelBtn.disabled = true;
@@ -623,7 +635,7 @@
                 var slideParser = new DOMParser();
                 var slideDoc = slideParser.parseFromString(slideXml, 'text/xml');
                 
-                // Find all image references in the slide
+                // Find all image references in the slide with their extents
                 var picElements = slideDoc.getElementsByTagName('p:pic');
                 var imageRefs = [];
                 
@@ -632,7 +644,19 @@
                     for (var j = 0; j < blipElements.length; j++) {
                         var embedAttr = blipElements[j].getAttribute('r:embed') || blipElements[j].getAttribute('r:link');
                         if (embedAttr) {
-                            imageRefs.push(embedAttr);
+                            // Try to get picture extent (size) from transform
+                            var extElements = picElements[i].getElementsByTagName('a:ext');
+                            var cx = 0, cy = 0;
+                            if (extElements.length > 0) {
+                                var cxAttr = extElements[0].getAttribute('cx');
+                                var cyAttr = extElements[0].getAttribute('cy');
+                                cx = cxAttr ? parseInt(cxAttr) : 0;
+                                cy = cyAttr ? parseInt(cyAttr) : 0;
+                            }
+                            imageRefs.push({
+                                rId: embedAttr,
+                                area: cx * cy  // Calculate area for heuristic
+                            });
                         }
                     }
                 }
@@ -669,8 +693,10 @@
                 }
                 
                 // Match image references to actual files
+                var loadedImages = [];
                 for (var i = 0; i < imageRefs.length; i++) {
-                    var refId = imageRefs[i];
+                    var refId = imageRefs[i].rId;
+                    var area = imageRefs[i].area;
                     var target = relMap[refId];
                     
                     if (!target) {
@@ -712,14 +738,46 @@
                             mimeType = 'image/png'; // Default fallback
                         }
                         
-                        images.push({
+                        loadedImages.push({
                             data: 'data:' + mimeType + ';base64,' + imageData,
                             rId: refId,
-                            isBackground: i === 0  // First referenced image becomes background
+                            area: area
                         });
                     } else {
                         summaryData.warnings.push('Slide ' + slideNum + ': Image file not found: ' + imagePath);
                     }
+                }
+                
+                // Choose background image: largest area wins, fallback to first if no extents
+                if (loadedImages.length > 0) {
+                    var maxArea = 0;
+                    var backgroundIndex = 0;
+                    var hasExtents = false;
+                    
+                    for (var i = 0; i < loadedImages.length; i++) {
+                        if (loadedImages[i].area > 0) {
+                            hasExtents = true;
+                            if (loadedImages[i].area > maxArea) {
+                                maxArea = loadedImages[i].area;
+                                backgroundIndex = i;
+                            }
+                        }
+                    }
+                    
+                    // Mark the chosen background
+                    for (var i = 0; i < loadedImages.length; i++) {
+                        images.push({
+                            data: loadedImages[i].data,
+                            rId: loadedImages[i].rId,
+                            isBackground: i === backgroundIndex
+                        });
+                    }
+                    
+                    // Store heuristic info for accessibility report
+                    if (!summaryData.backgroundHeuristic) {
+                        summaryData.backgroundHeuristic = {};
+                    }
+                    summaryData.backgroundHeuristic[slideNum] = hasExtents ? 'largest-extent' : 'first-image';
                 }
                 
                 // Add note if no images were resolved
@@ -877,8 +935,11 @@
                     
                     slide.text.content.forEach(function(item) {
                         if (item.isBullet) {
-                            // Remove bullet character and extra whitespace
-                            var cleanText = item.text.replace(BULLET_PATTERN, '').replace(/^\s+/, '');
+                            // Only strip leading bullet character if it actually exists
+                            var cleanText = item.text;
+                            if (BULLET_PATTERN.test(cleanText)) {
+                                cleanText = cleanText.replace(BULLET_PATTERN, '').replace(/^\s+/, '');
+                            }
                             bullets.push('<li>' + escapeHtml(cleanText) + '</li>');
                         } else {
                             if (bullets.length > 0) {
@@ -986,9 +1047,28 @@
             report.push('- Content readability and clarity');
             report.push('');
             report.push('=== LIMITATIONS DOCUMENTED ===');
-            report.push('1. Image-to-slide mapping: Uses r:embed references from slide XML.');
-            report.push('   Order is based on appearance in slide XML, which may differ from');
-            report.push('   visual stacking order. First referenced image becomes background.');
+            report.push('1. Background image selection: Uses largest picture extent heuristic.');
+            
+            // Add details about which heuristic was used per slide
+            if (summaryData.backgroundHeuristic) {
+                var usedLargestExtent = false;
+                var usedFirstImage = false;
+                for (var slideNum in summaryData.backgroundHeuristic) {
+                    if (summaryData.backgroundHeuristic[slideNum] === 'largest-extent') {
+                        usedLargestExtent = true;
+                    } else {
+                        usedFirstImage = true;
+                    }
+                }
+                if (usedLargestExtent) {
+                    report.push('   Most slides: Background chosen by largest picture extent (cx * cy).');
+                }
+                if (usedFirstImage) {
+                    report.push('   Some slides: Fallback to first image when extents unavailable.');
+                }
+            } else {
+                report.push('   Fallback to first referenced image when extents unavailable.');
+            }
             report.push('');
             report.push('2. Bullet detection: Uses paragraph properties (a:pPr, a:buChar,');
             report.push('   a:buAutoNum) when available. Falls back to Unicode bullet character');
@@ -1062,6 +1142,9 @@
             } catch (e) {
                 status.textContent = 'Download error: ' + e.message;
                 status.className = 'msg show err';
+                // Set assertive for errors
+                status.setAttribute('aria-live', 'assertive');
+                status.setAttribute('role', 'alert');
                 down.disabled = false;
                 announceToScreenReader('Download failed');
             }
@@ -1081,6 +1164,9 @@
             cancelBtn.disabled = true;
             status.textContent = 'Processing cancelled';
             status.className = 'msg show warn';
+            // Return to polite status for warnings
+            status.setAttribute('aria-live', 'polite');
+            status.setAttribute('role', 'status');
         }
 
         // Edit button
