@@ -430,7 +430,8 @@
                 colorIndex++;
                 
                 var heading = slide.text ? (slide.text.split('\n')[0] || 'Section ' + (i + 1)) : 'Section ' + (i + 1);
-                var body = slide.text ? slide.text.substring(heading.length).trim() : '';
+                var bodyStartIndex = slide.text ? slide.text.indexOf('\n') + 1 : 0;
+                var body = slide.text && bodyStartIndex > 0 ? slide.text.substring(bodyStartIndex).trim() : '';
                 var lines = body.split('\n').filter(function(l) { return l.trim(); });
                 
                 auditLog.push('Slide ' + (i + 1) + ': ' + slide.layout + ' layout (' + slide.textLength + ' chars, ' + slide.imageCount + ' images)');
@@ -563,7 +564,10 @@
             
             var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">';
             html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
-            html += '<title>' + escapeHtml(data.slides[0].text.split('\n')[0] || 'Scrollytelling') + '</title>';
+            var pageTitle = (data.slides.length > 0 && data.slides[0].text) 
+                ? escapeHtml(data.slides[0].text.split('\n')[0] || 'Scrollytelling')
+                : 'Scrollytelling';
+            html += '<title>' + pageTitle + '</title>';
             html += '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
             html += '<link href="https://fonts.googleapis.com/css2?family=' + googleFont + ':wght@400;600;700;800&family=' + secondaryFont + ':wght@400;500;600&display=swap" rel="stylesheet">';
             html += '<style>' + css + '</style></head><body>';
@@ -693,7 +697,7 @@
             scripts += 'entries.forEach(function(entry){';
             scripts += 'if(entry.isIntersecting){';
             scripts += 'entry.target.classList.add("revealed");';
-            scripts += 'observer.unobserve(entry.target)';
+            scripts += 'observer.unobserve(entry.target);';
             scripts += '}})},{threshold:0.1,rootMargin:"0px 0px -100px 0px"});';
             scripts += 'document.querySelectorAll("[data-reveal]").forEach(function(el){observer.observe(el)})';
             scripts += '}else{';
