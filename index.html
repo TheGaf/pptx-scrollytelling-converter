@@ -380,6 +380,9 @@
             forest: {bg1: '#0a2e1a', bg2: '#1a4a2e', p: '#22c55e', s: '#10b981'},
             sunset: {bg1: '#2e1a0a', bg2: '#4a2e1a', p: '#f97316', s: '#fb923c'}
         };
+        
+        // Bullet point detection pattern - common Unicode bullet characters
+        var BULLET_PATTERN = /^[\u2022\u2023\u25E6\u2043\u2219•·‣⁃]/;
 
         // Utility functions
         function escapeHtml(text) {
@@ -626,7 +629,23 @@
                         if (imageFile) {
                             var imageData = await imageFile.async('base64');
                             var ext = imagePath.split('.').pop().toLowerCase();
-                            var mimeType = 'image/' + (ext === 'jpg' ? 'jpeg' : ext);
+                            
+                            // Validate and map file extensions to MIME types
+                            var mimeTypeMap = {
+                                'jpg': 'image/jpeg',
+                                'jpeg': 'image/jpeg',
+                                'png': 'image/png',
+                                'gif': 'image/gif',
+                                'svg': 'image/svg+xml',
+                                'bmp': 'image/bmp',
+                                'webp': 'image/webp'
+                            };
+                            
+                            var mimeType = mimeTypeMap[ext];
+                            if (!mimeType) {
+                                summaryData.warnings.push('Unknown image format: ' + ext + ' in slide ' + slideNum);
+                                mimeType = 'image/png'; // Default fallback
+                            }
                             
                             images.push({
                                 data: 'data:' + mimeType + ';base64,' + imageData,
@@ -645,7 +664,22 @@
         function parseSlideText(xml) {
             var parser = new DOMParser();
             var doc = parser.parseFromString(xml, 'text/xml');
-            var texts = doc.querySelectorAll('a\\:t, t');
+            
+            // Use getElementsByTagName for better cross-browser compatibility with namespaced elements
+            var texts = [];
+            var aTexts = doc.getElementsByTagName('a:t');
+            var plainTexts = doc.getElementsByTagName('t');
+            
+            // Combine both nodesets
+            for (var i = 0; i < aTexts.length; i++) {
+                texts.push(aTexts[i]);
+            }
+            for (var i = 0; i < plainTexts.length; i++) {
+                // Avoid duplicates if element matches both
+                if (plainTexts[i].tagName !== 'a:t') {
+                    texts.push(plainTexts[i]);
+                }
+            }
             
             var paragraphs = [];
             var currentPara = '';
@@ -653,7 +687,16 @@
             texts.forEach(function(t) {
                 var text = t.textContent.trim();
                 if (text) {
-                    var paraNode = t.closest('a\\:p, p');
+                    // Try to find parent paragraph element
+                    var paraNode = t.parentElement;
+                    while (paraNode && paraNode.tagName !== 'a:p' && paraNode.tagName !== 'p') {
+                        paraNode = paraNode.parentElement;
+                        if (!paraNode || paraNode === doc.documentElement) {
+                            paraNode = null;
+                            break;
+                        }
+                    }
+                    
                     if (paraNode && currentPara && text) {
                         currentPara += ' ' + text;
                     } else {
@@ -676,7 +719,7 @@
             
             for (var i = 1; i < paragraphs.length; i++) {
                 var para = paragraphs[i];
-                var isBullet = para.match(/^[\u2022\u2023\u25E6\u2043\u2219•·‣⁃]/);
+                var isBullet = para.match(BULLET_PATTERN);
                 
                 result.content.push({
                     text: para,
@@ -716,7 +759,9 @@
                     
                     slide.text.content.forEach(function(item) {
                         if (item.isBullet) {
-                            bullets.push('<li>' + escapeHtml(item.text.replace(/^[\u2022\u2023\u25E6\u2043\u2219•·‣⁃]\s*/, '')) + '</li>');
+                            // Remove bullet character and extra whitespace
+                            var cleanText = item.text.replace(BULLET_PATTERN, '').replace(/^\s+/, '');
+                            bullets.push('<li>' + escapeHtml(cleanText) + '</li>');
                         } else {
                             if (bullets.length > 0) {
                                 content += '<ul>' + bullets.join('') + '</ul>';
