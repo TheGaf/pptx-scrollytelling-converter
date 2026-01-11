@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPTX to Scrollytelling</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Titillium Web', sans-serif; background: linear-gradient(135deg, #0f0a1a, #1a0a2e); color: #f5f5f5; min-height: 100vh; padding: 2rem; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { font-size: 2.5rem; margin-bottom: 1rem; background: linear-gradient(135deg, #00d9ff, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .subtitle { color: rgba(255,255,255,0.6); margin-bottom: 3rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+        .box { padding: 2rem; border-radius: 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+        .box h2 { font-size: 1.2rem; margin-bottom: 1.5rem; color: #00d9ff; }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+        input { width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #f5f5f5; font-family: 'Titillium Web', sans-serif; }
+        .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        .color-btn { padding: 0.75rem; border-radius: 0.5rem; border: 2px solid transparent; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        .color-btn.active { border-color: #00d9ff; box-shadow: 0 0 10px rgba(0,217,255,0.3); }
+        .drop { border: 2px dashed rgba(255,255,255,0.3); border-radius: 1rem; padding: 2rem; text-align: center; cursor: pointer; }
+        .drop.over { border-color: #00d9ff; background: rgba(0,217,255,0.1); }
+        .file-info { margin-top: 1rem; padding: 0.75rem; background: rgba(34,197,94,0.1); border-left: 3px solid #22c55e; border-radius: 0.5rem; color: #bbf7d0; display: none; }
+        .buttons { display: flex; gap: 1rem; margin-top: 2rem; }
+        button { flex: 1; padding: 1rem; border: none; border-radius: 0.5rem; font-family: 'Titillium Web', sans-serif; font-weight: 600; cursor: pointer; }
+        .btn-main { background: linear-gradient(135deg, #00d9ff, #a855f7); color: #0f0a1a; }
+        .btn-main:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-sec { background: rgba(255,255,255,0.1); color: #f5f5f5; border: 1px solid rgba(255,255,255,0.2); }
+        .msg { padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; display: none; }
+        .msg.show { display: block; }
+        .msg.ok { background: rgba(34,197,94,0.1); border-left: 3px solid #22c55e; color: #bbf7d0; }
+        .msg.err { background: rgba(239,68,68,0.1); border-left: 3px solid #ef4444; color: #fca5a5; }
+        .spin { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #00d9ff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .preview { display: none; margin-top: 2rem; padding: 2rem; border-radius: 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+        .preview.show { display: block; }
+        .preview h3 { color: #00d9ff; margin-bottom: 1rem; }
+        .preview iframe { width: 100%; height: 500px; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; background: white; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PPTX to Scrollytelling</h1>
+        <p class="subtitle">Convert your PowerPoint to an interactive scrollytelling site</p>
+
+        <div class="grid">
+            <div class="box">
+                <h2>Upload PPTX</h2>
+                <div class="drop" id="drop">
+                    <div style="font-size: 2.5rem; margin-bottom: 1rem;">📤</div>
+                    <p><strong>Drag & drop PPTX here</strong></p>
+                    <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem; margin-top: 0.5rem;">or click to browse</p>
+                    <input type="file" id="file" style="display: none;" accept=".pptx">
+                </div>
+                <div class="file-info" id="info"></div>
+                <div class="msg" id="status"></div>
+            </div>
+
+            <div class="box">
+                <h2>Customize</h2>
+                <div class="form-group">
+                    <label>Site Title</label>
+                    <input type="text" id="title" value="Driving Meaningful Health Change">
+                </div>
+                <div class="form-group">
+                    <label>Copyright</label>
+                    <input type="text" id="copy" value="© 2026 The Gaf NYC">
+                </div>
+                <div class="form-group">
+                    <label>Theme</label>
+                    <div class="colors">
+                        <button class="color-btn active" data-t="cyber" style="background: linear-gradient(135deg, #0f0a1a, #1a0a2e); color: #00d9ff;">Cyber</button>
+                        <button class="color-btn" data-t="ocean" style="background: linear-gradient(135deg, #0a1f2e, #1a3a4a); color: #00d9ff;">Ocean</button>
+                        <button class="color-btn" data-t="forest" style="background: linear-gradient(135deg, #0a2e1a, #1a4a2e); color: #22c55e;">Forest</button>
+                        <button class="color-btn" data-t="sunset" style="background: linear-gradient(135deg, #2e1a0a, #4a2e1a); color: #f97316;">Sunset</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="load" style="display: none; text-align: center; padding: 2rem;">
+            <div class="spin"></div>
+            <p id="loadtxt">Processing...</p>
+        </div>
+
+        <div class="preview" id="prev">
+            <h3>Preview</h3>
+            <iframe id="iframe" sandbox="allow-same-origin"></iframe>
+            <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                <button class="btn-sec" id="edit" style="flex: 1;">Edit</button>
+                <button class="btn-main" id="down" style="flex: 1;">Download</button>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button class="btn-main" id="gen" disabled>Generate Preview</button>
+            <button class="btn-sec" id="reset">Reset</button>
+        </div>
+    </div>
+
+    <script>
+        var file = null, theme = 'cyber', html = null, zip = null;
+        var drop = document.getElementById('drop');
+        var inp = document.getElementById('file');
+        var info = document.getElementById('info');
+        var status = document.getElementById('status');
+        var load = document.getElementById('load');
+        var prev = document.getElementById('prev');
+        var gen = document.getElementById('gen');
+        var down = document.getElementById('down');
+        var edit = document.getElementById('edit');
+        var reset = document.getElementById('reset');
+        var iframe = document.getElementById('iframe');
+        var titleinp = document.getElementById('title');
+        var copyinp = document.getElementById('copy');
+
+        var themes = {
+            cyber: {bg1: '#0f0a1a', bg2: '#1a0a2e', p: '#00d9ff', s: '#a855f7'},
+            ocean: {bg1: '#0a1f2e', bg2: '#1a3a4a', p: '#00d9ff', s: '#0ea5e9'},
+            forest: {bg1: '#0a2e1a', bg2: '#1a4a2e', p: '#22c55e', s: '#10b981'},
+            sunset: {bg1: '#2e1a0a', bg2: '#4a2e1a', p: '#f97316', s: '#fb923c'}
+        };
+
+        drop.onclick = function() { inp.click(); };
+        drop.ondragover = function(e) { e.preventDefault(); drop.classList.add('over'); };
+        drop.ondragleave = function() { drop.classList.remove('over'); };
+        drop.ondrop = function(e) { e.preventDefault(); drop.classList.remove('over'); handleFile(e.dataTransfer.files[0]); };
+        inp.onchange = function(e) { handleFile(e.target.files[0]); };
+
+        function handleFile(f) {
+            if (!f || !f.name.endsWith('.pptx')) {
+                status.textContent = 'Please select a PPTX file';
+                status.className = 'msg show err';
+                return;
+            }
+            file = f;
+            info.textContent = 'OK ' + f.name;
+            info.style.display = 'block';
+            gen.disabled = false;
+            status.textContent = 'Ready to process';
+            status.className = 'msg show ok';
+        }
+
+        document.querySelectorAll('.color-btn').forEach(function(btn) {
+            btn.onclick = function() {
+                document.querySelectorAll('.color-btn').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                theme = btn.dataset.t;
+            };
+        });
+
+        gen.onclick = function() {
+            if (!file) return;
+            load.style.display = 'block';
+            gen.disabled = true;
+            
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                JSZip.loadAsync(e.target.result).then(function(z) {
+                    var slideFolder = z.folder('ppt/slides');
+                    if (!slideFolder) {
+                        status.textContent = 'No slides found';
+                        status.className = 'msg show err';
+                        load.style.display = 'none';
+                        gen.disabled = false;
+                        return;
+                    }
+
+                    var slides = [];
+                    var files = Object.keys(slideFolder.files).filter(function(f) { return f.match(/slide\d+\.xml$/); }).sort();
+                    
+                    var count = 0;
+                    files.forEach(function(f) {
+                        slideFolder.file(f).async('string').then(function(xml) {
+                            var parser = new DOMParser();
+                            var doc = parser.parseFromString(xml, 'text/xml');
+                            var texts = doc.querySelectorAll('a:t');
+                            var txt = '';
+                            texts.forEach(function(t) { txt += t.textContent + ' '; });
+                            slides.push({text: txt.trim()});
+                            
+                            count++;
+                            if (count === files.length) {
+                                html = makeHTML(slides);
+                                zip = z;
+                                iframe.srcdoc = html;
+                                prev.classList.add('show');
+                                load.style.display = 'none';
+                                gen.disabled = false;
+                                status.textContent = 'Preview ready';
+                                status.className = 'msg show ok';
+                            }
+                        });
+                    });
+                }).catch(function(e) {
+                    status.textContent = 'Error: ' + e.message;
+                    status.className = 'msg show err';
+                    load.style.display = 'none';
+                    gen.disabled = false;
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        function makeHTML(slides) {
+            var t = themes[theme];
+            var secs = '';
+            for (var i = 0; i < slides.length; i++) {
+                secs += '<section><div class="ov"></div><div class="con"><h2>Section ' + (i+1) + '</h2><p>' + slides[i].text + '</p></div></section>';
+            }
+
+            var css = '*{margin:0;padding:0;box-sizing:border-box}:root{--p:' + t.p + ';--s:' + t.s + ';--b1:' + t.bg1 + ';--b2:' + t.bg2 + '}html{scroll-behavior:smooth}body{font-family:Titillium Web,sans-serif;background:linear-gradient(135deg,var(--b1),var(--b2));color:#f5f5f5;line-height:1.6}.pb{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--p),var(--s));z-index:1000;width:0;transition:width 0.3s}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 0}@media(min-width:1024px){section{min-height:100vh;padding:0}}.con{max-width:1200px;margin:0 auto;padding:2rem;width:100%;position:relative;z-index:10}h1{font-size:clamp(2.5rem,8vw,5rem);font-weight:700;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--p),#fff,var(--s));-webkit-background-clip:text;-webkit-text-fill-color:transparent}h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;margin-bottom:2rem}p{font-size:1.1rem;color:rgba(255,255,255,0.8);margin-bottom:1rem}.ov{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,rgba(26,10,46,0.8),rgba(26,10,46,0.6));z-index:2}#hero{background:linear-gradient(135deg,var(--b1),var(--b2))}.hc{text-align:center;animation:fadeIn 1s}@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}footer{padding:2rem;border-top:1px solid rgba(255,255,255,0.1);text-align:center;color:rgba(255,255,255,0.5)}';
+
+            var result = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + titleinp.value + '</title><link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="pb" id="pb"></div><section id="hero"><div class="ov"></div><div class="con"><div class="hc"><h1>' + titleinp.value + '</h1><p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p></div></div></section>' + secs + '<footer><p>' + copyinp.value + '</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"})<\/script></body></html>';
+
+            return result;
+        }
+
+        down.onclick = function() {
+            if (!zip) return;
+            down.disabled = true;
+            zip.generateAsync({type: 'blob'}).then(function(blob) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'scrollytelling.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                down.disabled = false;
+            });
+        };
+
+        edit.onclick = function() {
+            prev.classList.remove('show');
+            gen.disabled = false;
+        };
+
+        reset.onclick = function() {
+            file = null;
+            inp.value = '';
+            info.style.display = 'none';
+            gen.disabled = true;
+            status.classList.remove('show');
+            prev.classList.remove('show');
+            titleinp.value = 'Driving Meaningful Health Change';
+            copyinp.value = '© 2026 The Gaf NYC';
+            theme = 'cyber';
+            document.querySelectorAll('.color-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.color-btn')[0].classList.add('active');
+        };
+    </script>
+</body>
+</html>
