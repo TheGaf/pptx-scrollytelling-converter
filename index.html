@@ -369,19 +369,28 @@
                 if (slide.shapes) {
                     for (var j = 0; j < slide.shapes.length; j++) {
                         var shape = slide.shapes[j];
-                        if (shape.width) widths.push(shape.width);
-                        if (shape.height) spacings.push(shape.height);
-                        if (shape.borderRadius) borderRadii.push(shape.borderRadius);
+                        if (shape.width && shape.width > 0) widths.push(shape.width);
+                        if (shape.height && shape.height > 0) spacings.push(shape.height);
+                        if (shape.borderRadius && shape.borderRadius > 0) borderRadii.push(shape.borderRadius);
                     }
                 }
             }
             
             var baseSpacing = 8;
             if (spacings.length > 0) {
-                spacings.sort(function(a, b) { return a - b; });
-                var gcd = function(a, b) { return b === 0 ? a : gcd(b, a % b); };
-                var commonDivisor = spacings.reduce(gcd);
-                if (commonDivisor > 4 && commonDivisor < 32) baseSpacing = commonDivisor;
+                spacings = spacings.filter(function(s) { return s > 0 && !isNaN(s); });
+                if (spacings.length > 0) {
+                    spacings.sort(function(a, b) { return a - b; });
+                    var gcd = function(a, b) { 
+                        a = Math.abs(Math.round(a));
+                        b = Math.abs(Math.round(b));
+                        if (b === 0) return a;
+                        if (a === 0) return b;
+                        return gcd(b, a % b);
+                    };
+                    var commonDivisor = spacings.reduce(gcd);
+                    if (commonDivisor > 4 && commonDivisor < 32) baseSpacing = commonDivisor;
+                }
             }
             
             var containerWidth = 1200;
@@ -489,7 +498,8 @@
                     if (accent5Match) { data.colorPalette.push('#' + accent5Match[1]); }
                     if (accent6Match) { data.colorPalette.push('#' + accent6Match[1]); }
                     
-                    var bgLum = getLuminance(hexToRgb(data.colors.background).r, hexToRgb(data.colors.background).g, hexToRgb(data.colors.background).b);
+                    var bgRgb = hexToRgb(data.colors.background);
+                    var bgLum = bgRgb ? getLuminance(bgRgb.r, bgRgb.g, bgRgb.b) : 0.5;
                     data.colors.surface = bgLum > 0.5 ? '#f8f9fa' : '#1f2937';
                     data.colors.border = bgLum > 0.5 ? '#e5e7eb' : '#374151';
                     data.colors.muted = bgLum > 0.5 ? '#6b7280' : '#9ca3af';
@@ -636,7 +646,7 @@
                         source: data.fonts.primary.source,
                         mapped: data.fonts.primary.mapped,
                         weights: [400, 600, 700, 800],
-                        googleFontsUrl: 'https://fonts.googleapis.com/css2?family=' + data.fonts.primary.googleFont.replace(/ /g, '+') + ':wght@400;600;700;800&display=swap'
+                        googleFontsUrl: 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(data.fonts.primary.googleFont) + ':wght@400;600;700;800&display=swap'
                     },
                     secondary: {
                         family: data.fonts.secondary.googleFont,
@@ -644,7 +654,7 @@
                         source: data.fonts.secondary.source,
                         mapped: data.fonts.secondary.mapped,
                         weights: [400, 600],
-                        googleFontsUrl: 'https://fonts.googleapis.com/css2?family=' + data.fonts.secondary.googleFont.replace(/ /g, '+') + ':wght@400;600&display=swap'
+                        googleFontsUrl: 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(data.fonts.secondary.googleFont) + ':wght@400;600&display=swap'
                     },
                     scale: {
                         xs: '0.75rem',
