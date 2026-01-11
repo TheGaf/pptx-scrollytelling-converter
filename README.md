@@ -1,10 +1,17 @@
 # PPTX Scrollytelling Converter
 
-A browser-based tool that converts PowerPoint presentations into bespoke scrollytelling websites. This project extracts content, design elements, and styling from PPTX files and generates custom, responsive web experiences.
+A browser-based tool that converts PowerPoint presentations into bespoke scrollytelling websites. This project extracts content, design elements, and styling from PPTX files and generates custom web experiences with fixed desktop and mobile layouts.
 
 ## 🎯 Overview
 
 The PPTX Scrollytelling Converter transforms static presentations into dynamic, scroll-driven narratives. Each conversion analyzes the source deck's unique fonts, colors, layouts, and visual hierarchy to create a custom scrollytelling site that preserves the original design intent.
+
+### Output Site Specifications
+
+- **Desktop Layout**: Fixed 1400px width with full viewport-height sections
+- **Mobile Layout**: Fixed 375px width with optimized spacing
+- **Clean Breakpoint**: At 768px - no responsive scaling between sizes
+- **Typography**: Size-specific font scales for each layout
 
 ## ✨ Features
 
@@ -41,6 +48,11 @@ The core parsing module that processes PPTX files and extracts structured data:
   - Maps accent colors and system colors
   - Supports scheme color references
   - Preserves color relationships
+
+- **✅ Security**
+  - SRI integrity hashes for CDN resources
+  - Path traversal protection
+  - No XSS vulnerabilities
 
 ## 🚀 Quick Start
 
@@ -161,6 +173,35 @@ The parser generates a clean JSON model with the following structure:
   ]
 }
 ```
+
+## 🎨 Generated Site Layout
+
+The converter creates scrollytelling sites with two fixed layouts:
+
+### Desktop Layout (1400px)
+- **Width**: Fixed at 1400px
+- **Sections**: Full viewport height (100vh)
+- **Typography**: 
+  - Hero H1: 4rem
+  - Section H2: 2.5rem
+  - Body text: 1.2rem
+- **Padding**: 80px vertical, 60px horizontal
+- **Content max-width**: 1000px centered
+
+### Mobile Layout (375px)
+- **Width**: Fixed at 375px
+- **Sections**: Full viewport height (100vh)
+- **Typography**:
+  - Hero H1: 2rem
+  - Section H2: 1.5rem
+  - Body text: 0.95rem
+- **Padding**: 60px vertical, 20px horizontal
+- **Content max-width**: 335px
+
+### Breakpoint
+- **Media Query**: `@media (max-width: 768px)`
+- **No Responsive Scaling**: Clean switch between desktop and mobile layouts
+- **Scroll Behavior**: Smooth scrolling on both layouts
 
 ## 🔧 Technical Details
 
