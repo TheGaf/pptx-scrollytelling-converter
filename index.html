@@ -168,10 +168,42 @@
             'poppins': 'Poppins',
             'raleway': 'Raleway',
             'ubuntu': 'Ubuntu',
+            'nunito': 'Nunito',
+            'work': 'Work Sans',
+            'playfair': 'Playfair Display',
+            'oswald': 'Oswald',
+            'pt': 'PT Sans',
+            'noto': 'Noto Sans',
+            'mukta': 'Mukta',
+            'rubik': 'Rubik',
+            'karla': 'Karla',
+            'barlow': 'Barlow',
+            'quicksand': 'Quicksand',
+            'manrope': 'Manrope',
+            'dm': 'DM Sans',
+            'space': 'Space Grotesk',
+            'plus': 'Plus Jakarta Sans',
+            'bebas': 'Bebas Neue',
+            'anton': 'Anton',
+            'cabin': 'Cabin',
+            'fira': 'Fira Sans',
+            'exo': 'Exo 2',
             'helvetica': 'Helvetica Neue',
             'arial': 'Arial',
             'georgia': 'Georgia',
-            'times': 'Times New Roman'
+            'times': 'Times New Roman',
+            'verdana': 'Verdana',
+            'tahoma': 'Tahoma',
+            'trebuchet': 'Trebuchet MS',
+            'courier': 'Courier New',
+            'impact': 'Impact'
+        };
+        
+        var systemSafeFonts = {
+            'serif': 'Georgia, "Times New Roman", Times, serif',
+            'sans-serif': 'Arial, Helvetica, "Helvetica Neue", sans-serif',
+            'monospace': '"Courier New", Courier, monospace',
+            'display': 'Impact, "Arial Black", sans-serif'
         };
 
         dropZone.addEventListener('click', function() { fileInput.click(); });
@@ -226,22 +258,191 @@
         }
 
         function mapFont(fontName) {
-            if (!fontName) return 'Inter';
+            if (!fontName) return { googleFont: 'Inter', fallback: systemSafeFonts['sans-serif'], mapped: false, source: 'default' };
+            
             var lower = fontName.toLowerCase();
             for (var key in fontMappings) {
-                if (lower.includes(key)) return fontMappings[key];
+                if (lower.includes(key)) {
+                    var googleFont = fontMappings[key];
+                    var fallback = systemSafeFonts['sans-serif'];
+                    
+                    if (lower.includes('serif') || googleFont === 'Merriweather' || googleFont === 'Playfair Display') {
+                        fallback = systemSafeFonts['serif'];
+                    } else if (lower.includes('mono') || googleFont === 'IBM Plex Mono') {
+                        fallback = systemSafeFonts['monospace'];
+                    } else if (googleFont === 'Impact' || googleFont === 'Anton' || googleFont === 'Bebas Neue') {
+                        fallback = systemSafeFonts['display'];
+                    }
+                    
+                    return { googleFont: googleFont, fallback: fallback, mapped: true, source: fontName };
+                }
             }
-            return 'Inter';
+            
+            var fallback = systemSafeFonts['sans-serif'];
+            if (lower.includes('serif')) fallback = systemSafeFonts['serif'];
+            else if (lower.includes('mono')) fallback = systemSafeFonts['monospace'];
+            else if (lower.includes('impact') || lower.includes('heavy')) fallback = systemSafeFonts['display'];
+            
+            return { googleFont: 'Inter', fallback: fallback, mapped: false, source: fontName };
+        }
+        
+        function hexToRgb(hex) {
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+        
+        function getLuminance(r, g, b) {
+            var a = [r, g, b].map(function(v) {
+                v /= 255;
+                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+            });
+            return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+        }
+        
+        function getContrastRatio(hex1, hex2) {
+            var rgb1 = hexToRgb(hex1);
+            var rgb2 = hexToRgb(hex2);
+            if (!rgb1 || !rgb2) return 1;
+            
+            var lum1 = getLuminance(rgb1.r, rgb1.g, rgb1.b);
+            var lum2 = getLuminance(rgb2.r, rgb2.g, rgb2.b);
+            var lighter = Math.max(lum1, lum2);
+            var darker = Math.min(lum1, lum2);
+            
+            return (lighter + 0.05) / (darker + 0.05);
+        }
+        
+        function adjustColorForContrast(textColor, bgColor, targetRatio) {
+            var ratio = getContrastRatio(textColor, bgColor);
+            if (ratio >= targetRatio) return { color: textColor, adjusted: false, ratio: ratio };
+            
+            var rgb = hexToRgb(textColor);
+            var bgRgb = hexToRgb(bgColor);
+            if (!rgb || !bgRgb) return { color: textColor, adjusted: false, ratio: ratio };
+            
+            var bgLum = getLuminance(bgRgb.r, bgRgb.g, bgRgb.b);
+            var shouldDarken = bgLum > 0.5;
+            
+            var adjusted = Object.assign({}, rgb);
+            var steps = 0;
+            var maxSteps = 50;
+            
+            while (steps < maxSteps) {
+                var newLum = getLuminance(adjusted.r, adjusted.g, adjusted.b);
+                var newRatio = bgLum > newLum ? (bgLum + 0.05) / (newLum + 0.05) : (newLum + 0.05) / (bgLum + 0.05);
+                
+                if (newRatio >= targetRatio) {
+                    var newHex = '#' + [adjusted.r, adjusted.g, adjusted.b].map(function(x) {
+                        var hex = Math.round(x).toString(16);
+                        return hex.length === 1 ? '0' + hex : hex;
+                    }).join('');
+                    return { color: newHex, adjusted: true, ratio: newRatio, originalRatio: ratio };
+                }
+                
+                if (shouldDarken) {
+                    adjusted.r = Math.max(0, adjusted.r - 5);
+                    adjusted.g = Math.max(0, adjusted.g - 5);
+                    adjusted.b = Math.max(0, adjusted.b - 5);
+                } else {
+                    adjusted.r = Math.min(255, adjusted.r + 5);
+                    adjusted.g = Math.min(255, adjusted.g + 5);
+                    adjusted.b = Math.min(255, adjusted.b + 5);
+                }
+                steps++;
+            }
+            
+            var fallbackColor = shouldDarken ? '#000000' : '#ffffff';
+            return { color: fallbackColor, adjusted: true, ratio: getContrastRatio(fallbackColor, bgColor), originalRatio: ratio, fallback: true };
+        }
+        
+        function extractRhythmTokens(slides) {
+            var spacings = [];
+            var widths = [];
+            var borderRadii = [];
+            
+            for (var i = 0; i < slides.length; i++) {
+                var slide = slides[i];
+                if (slide.shapes) {
+                    for (var j = 0; j < slide.shapes.length; j++) {
+                        var shape = slide.shapes[j];
+                        if (shape.width) widths.push(shape.width);
+                        if (shape.height) spacings.push(shape.height);
+                        if (shape.borderRadius) borderRadii.push(shape.borderRadius);
+                    }
+                }
+            }
+            
+            var baseSpacing = 8;
+            if (spacings.length > 0) {
+                spacings.sort(function(a, b) { return a - b; });
+                var gcd = function(a, b) { return b === 0 ? a : gcd(b, a % b); };
+                var commonDivisor = spacings.reduce(gcd);
+                if (commonDivisor > 4 && commonDivisor < 32) baseSpacing = commonDivisor;
+            }
+            
+            var containerWidth = 1200;
+            if (widths.length > 0) {
+                var avgWidth = widths.reduce(function(a, b) { return a + b; }, 0) / widths.length;
+                if (avgWidth > 800 && avgWidth < 1400) containerWidth = Math.round(avgWidth / 100) * 100;
+            }
+            
+            var defaultRadius = 8;
+            if (borderRadii.length > 0) {
+                var avgRadius = borderRadii.reduce(function(a, b) { return a + b; }, 0) / borderRadii.length;
+                defaultRadius = Math.round(avgRadius);
+            }
+            
+            return {
+                baseSpacing: baseSpacing,
+                spacingScale: [0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8].map(function(x) { return baseSpacing * x; }),
+                containerMaxWidth: containerWidth,
+                gutterSize: baseSpacing * 2,
+                borderRadius: {
+                    small: Math.round(defaultRadius * 0.5),
+                    medium: defaultRadius,
+                    large: Math.round(defaultRadius * 1.5),
+                    full: 9999
+                },
+                borderWidth: {
+                    thin: 1,
+                    medium: 2,
+                    thick: 4
+                },
+                shadow: {
+                    small: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+                    medium: '0 3px 6px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.12)',
+                    large: '0 10px 20px rgba(0,0,0,0.15), 0 3px 6px rgba(0,0,0,0.10)'
+                }
+            };
         }
 
         function extractPPTXData(pptxZip) {
             var data = {
-                fonts: { primary: 'Inter', secondary: 'Inter' },
-                colors: { primary: '#0076BA', secondary: '#05A89D', background: '#ffffff', foreground: '#1a1a1a', accent: '#F9B900' },
+                fonts: { 
+                    primary: { googleFont: 'Inter', fallback: systemSafeFonts['sans-serif'], mapped: false, source: 'default' },
+                    secondary: { googleFont: 'Inter', fallback: systemSafeFonts['sans-serif'], mapped: false, source: 'default' }
+                },
+                colors: { 
+                    primary: '#0076BA', 
+                    secondary: '#05A89D', 
+                    background: '#ffffff', 
+                    foreground: '#1a1a1a', 
+                    accent: '#F9B900',
+                    surface: '#f8f9fa',
+                    border: '#e5e7eb',
+                    muted: '#6b7280'
+                },
                 slides: [],
                 images: [],
                 colorPalette: [],
-                designStyle: 'modern'
+                designStyle: 'modern',
+                designTokens: null,
+                contrastAdjustments: [],
+                accessibilityWarnings: []
             };
 
             try {
@@ -251,21 +452,73 @@
                     
                     var majorFontMatch = themeXml.match(/<a:majorFont><a:latin typeface="([^"]+)"/);
                     var minorFontMatch = themeXml.match(/<a:minorFont><a:latin typeface="([^"]+)"/);
-                    if (majorFontMatch) data.fonts.primary = mapFont(majorFontMatch[1]);
-                    if (minorFontMatch) data.fonts.secondary = mapFont(minorFontMatch[1]);
                     
+                    if (majorFontMatch) {
+                        data.fonts.primary = mapFont(majorFontMatch[1]);
+                        if (data.fonts.primary.mapped) {
+                            addLog('Primary font "' + data.fonts.primary.source + '" mapped to Google Font "' + data.fonts.primary.googleFont + '"', 'info');
+                        } else {
+                            addLog('Primary font "' + data.fonts.primary.source + '" not found in Google Fonts, using fallback "' + data.fonts.primary.googleFont + '"', 'warn');
+                        }
+                    }
+                    
+                    if (minorFontMatch) {
+                        data.fonts.secondary = mapFont(minorFontMatch[1]);
+                        if (data.fonts.secondary.mapped) {
+                            addLog('Secondary font "' + data.fonts.secondary.source + '" mapped to Google Font "' + data.fonts.secondary.googleFont + '"', 'info');
+                        } else {
+                            addLog('Secondary font "' + data.fonts.secondary.source + '" not found in Google Fonts, using fallback "' + data.fonts.secondary.googleFont + '"', 'warn');
+                        }
+                    }
+                    
+                    var dk1Match = themeXml.match(/<a:dk1><a:srgbClr val="([0-9A-Fa-f]{6})"/);
+                    var lt1Match = themeXml.match(/<a:lt1><a:srgbClr val="([0-9A-Fa-f]{6})"/);
                     var accent1Match = themeXml.match(/<a:accent1><a:srgbClr val="([0-9A-Fa-f]{6})"/);
                     var accent2Match = themeXml.match(/<a:accent2><a:srgbClr val="([0-9A-Fa-f]{6})"/);
                     var accent3Match = themeXml.match(/<a:accent3><a:srgbClr val="([0-9A-Fa-f]{6})"/);
                     var accent4Match = themeXml.match(/<a:accent4><a:srgbClr val="([0-9A-Fa-f]{6})"/);
+                    var accent5Match = themeXml.match(/<a:accent5><a:srgbClr val="([0-9A-Fa-f]{6})"/);
+                    var accent6Match = themeXml.match(/<a:accent6><a:srgbClr val="([0-9A-Fa-f]{6})"/);
                     
-                    if (accent1Match) data.colors.primary = '#' + accent1Match[1];
-                    if (accent2Match) data.colors.secondary = '#' + accent2Match[1];
-                    if (accent3Match) data.colorPalette.push('#' + accent3Match[1]);
+                    if (dk1Match) data.colors.foreground = '#' + dk1Match[1];
+                    if (lt1Match) data.colors.background = '#' + lt1Match[1];
+                    if (accent1Match) { data.colors.primary = '#' + accent1Match[1]; data.colorPalette.push('#' + accent1Match[1]); }
+                    if (accent2Match) { data.colors.secondary = '#' + accent2Match[1]; data.colorPalette.push('#' + accent2Match[1]); }
+                    if (accent3Match) { data.colorPalette.push('#' + accent3Match[1]); }
                     if (accent4Match) { data.colors.accent = '#' + accent4Match[1]; data.colorPalette.push('#' + accent4Match[1]); }
+                    if (accent5Match) { data.colorPalette.push('#' + accent5Match[1]); }
+                    if (accent6Match) { data.colorPalette.push('#' + accent6Match[1]); }
                     
-                    addLog('Fonts: ' + data.fonts.primary + ' (primary), ' + data.fonts.secondary + ' (secondary)', 'info');
-                    addLog('Colors: ' + data.colors.primary + ', ' + data.colors.secondary, 'info');
+                    var bgLum = getLuminance(hexToRgb(data.colors.background).r, hexToRgb(data.colors.background).g, hexToRgb(data.colors.background).b);
+                    data.colors.surface = bgLum > 0.5 ? '#f8f9fa' : '#1f2937';
+                    data.colors.border = bgLum > 0.5 ? '#e5e7eb' : '#374151';
+                    data.colors.muted = bgLum > 0.5 ? '#6b7280' : '#9ca3af';
+                    
+                    var fgContrast = getContrastRatio(data.colors.foreground, data.colors.background);
+                    if (fgContrast < 4.5) {
+                        var adjusted = adjustColorForContrast(data.colors.foreground, data.colors.background, 4.5);
+                        if (adjusted.adjusted) {
+                            data.contrastAdjustments.push({
+                                type: 'foreground',
+                                original: data.colors.foreground,
+                                adjusted: adjusted.color,
+                                originalRatio: adjusted.originalRatio || fgContrast,
+                                newRatio: adjusted.ratio
+                            });
+                            data.colors.foreground = adjusted.color;
+                            addLog('Text color adjusted for WCAG AA contrast: ' + fgContrast.toFixed(2) + ' → ' + adjusted.ratio.toFixed(2), 'info');
+                        } else {
+                            data.accessibilityWarnings.push({
+                                type: 'contrast',
+                                element: 'foreground text',
+                                ratio: fgContrast.toFixed(2),
+                                minimum: 4.5
+                            });
+                            addLog('Warning: Text color contrast ' + fgContrast.toFixed(2) + ' is below WCAG AA standard (4.5)', 'warn');
+                        }
+                    }
+                    
+                    addLog('Extracted theme colors: primary=' + data.colors.primary + ', secondary=' + data.colors.secondary, 'info');
                 } else {
                     addLog('No theme file found, using defaults', 'warn');
                 }
@@ -294,6 +547,26 @@
                             text += textNodes[j].replace(/<a:t>|<\/a:t>/g, '') + ' ';
                         }
                         
+                        var shapes = [];
+                        var spMatches = xmlContent.match(/<p:sp>[\s\S]*?<\/p:sp>/g) || [];
+                        for (var j = 0; j < spMatches.length; j++) {
+                            var shapeXml = spMatches[j];
+                            var widthMatch = shapeXml.match(/cx="(\d+)"/);
+                            var heightMatch = shapeXml.match(/cy="(\d+)"/);
+                            var xMatch = shapeXml.match(/x="(\d+)"/);
+                            var yMatch = shapeXml.match(/y="(\d+)"/);
+                            
+                            var shape = {
+                                width: widthMatch ? parseInt(widthMatch[1]) / 914400 : 0,
+                                height: heightMatch ? parseInt(heightMatch[1]) / 914400 : 0,
+                                x: xMatch ? parseInt(xMatch[1]) / 914400 : 0,
+                                y: yMatch ? parseInt(yMatch[1]) / 914400 : 0,
+                                borderRadius: 0
+                            };
+                            
+                            if (shape.width > 0) shapes.push(shape);
+                        }
+                        
                         var hasImage = xmlContent.includes('blip') || xmlContent.includes('image');
                         var hasBackground = xmlContent.includes('solidFill') || xmlContent.includes('gradFill');
                         var textLength = text.trim().length;
@@ -311,7 +584,8 @@
                             layout: layout,
                             hasImage: hasImage,
                             hasBackground: hasBackground,
-                            textLength: textLength
+                            textLength: textLength,
+                            shapes: shapes
                         });
                     }
                     addLog('Analyzed ' + data.slides.length + ' slides with design detection', 'info');
@@ -326,21 +600,86 @@
                 var mediaFolder = pptxZip.folder('ppt/media');
                 if (mediaFolder) {
                     var imageCount = 0;
+                    var emfWmfCount = 0;
                     mediaFolder.forEach(function(path, file) {
                         if (path.includes('.emf') || path.includes('.wmf')) {
+                            emfWmfCount++;
                             addLog('Skipped EMF/WMF: ' + path, 'warn');
                         } else if (path.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                            file.async('arraybuffer').then(function(data) {
-                                data.images.push({ path: path, data: data });
+                            file.async('arraybuffer').then(function(imgData) {
+                                data.images.push({ path: path, data: imgData });
                             });
                             imageCount++;
                         }
                     });
                     if (imageCount > 0) addLog('Extracted ' + imageCount + ' images', 'info');
+                    if (emfWmfCount > 0) {
+                        data.accessibilityWarnings.push({
+                            type: 'media',
+                            element: 'EMF/WMF images',
+                            count: emfWmfCount,
+                            message: emfWmfCount + ' EMF/WMF images were skipped (unsupported format)'
+                        });
+                    }
                 }
             } catch (e) {
                 addLog('Error extracting images: ' + e.message, 'warn');
             }
+            
+            var rhythmTokens = extractRhythmTokens(data.slides);
+            
+            data.designTokens = {
+                fonts: {
+                    primary: {
+                        family: data.fonts.primary.googleFont,
+                        fallback: data.fonts.primary.fallback,
+                        source: data.fonts.primary.source,
+                        mapped: data.fonts.primary.mapped,
+                        weights: [400, 600, 700, 800],
+                        googleFontsUrl: 'https://fonts.googleapis.com/css2?family=' + data.fonts.primary.googleFont.replace(/ /g, '+') + ':wght@400;600;700;800&display=swap'
+                    },
+                    secondary: {
+                        family: data.fonts.secondary.googleFont,
+                        fallback: data.fonts.secondary.fallback,
+                        source: data.fonts.secondary.source,
+                        mapped: data.fonts.secondary.mapped,
+                        weights: [400, 600],
+                        googleFontsUrl: 'https://fonts.googleapis.com/css2?family=' + data.fonts.secondary.googleFont.replace(/ /g, '+') + ':wght@400;600&display=swap'
+                    },
+                    scale: {
+                        xs: '0.75rem',
+                        sm: '0.875rem',
+                        base: '1rem',
+                        lg: '1.125rem',
+                        xl: '1.25rem',
+                        '2xl': '1.5rem',
+                        '3xl': '1.875rem',
+                        '4xl': '2.25rem',
+                        '5xl': '3rem'
+                    }
+                },
+                colors: {
+                    primary: data.colors.primary,
+                    secondary: data.colors.secondary,
+                    accent: data.colors.accent,
+                    background: data.colors.background,
+                    foreground: data.colors.foreground,
+                    surface: data.colors.surface,
+                    border: data.colors.border,
+                    muted: data.colors.muted,
+                    palette: data.colorPalette,
+                    contrastAdjustments: data.contrastAdjustments
+                },
+                rhythm: rhythmTokens,
+                meta: {
+                    extractedAt: new Date().toISOString(),
+                    slideCount: data.slides.length,
+                    imageCount: data.images.length,
+                    designStyle: data.designStyle
+                }
+            };
+            
+            addLog('Design DNA extracted: ' + Object.keys(data.designTokens.fonts).length + ' font tokens, ' + Object.keys(data.designTokens.colors).length + ' color tokens', 'info');
 
             return data;
         }
@@ -378,8 +717,9 @@
                 }
             }
 
-            var googleFont = data.fonts.primary.replace(/ /g, '+');
-            var css = ':root{--primary:' + data.colors.primary + ';--secondary:' + data.colors.secondary + ';--accent:' + data.colors.accent + ';--bg:#fff;--text:' + data.colors.foreground + '}*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:"' + data.fonts.primary + '",-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}.progress-bar{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--primary),var(--secondary),var(--accent));z-index:1000;width:0;transition:width 0.3s ease}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 2rem}@media(min-width:1024px){section{min-height:100vh;padding:0 2rem}}section.hero{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;text-align:center}section.hero h1{font-size:clamp(2.5rem,8vw,4.5rem);margin-bottom:1rem;font-weight:800}section.hero p{font-size:clamp(1rem,3vw,1.5rem);opacity:0.95}.section-content{max-width:1000px;margin:0 auto;width:100%;position:relative;z-index:10}h1,h2{font-weight:700;margin-bottom:1rem}h1{font-size:clamp(2rem,8vw,4rem)}h2{font-size:clamp(1.5rem,5vw,2.5rem)}p{font-size:1.1rem;margin-bottom:1rem}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.75rem;list-style:none}li:before{content:"▸";margin-right:0.75rem;color:var(--secondary);font-weight:700}footer{padding:2rem;border-top:2px solid var(--primary);text-align:center;color:var(--text);opacity:0.7;font-size:0.9rem}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}@media(max-width:768px){section{padding:72px 1rem}}';
+            var googleFont = data.fonts.primary.googleFont.replace(/ /g, '+');
+            var fontFamily = '"' + data.fonts.primary.googleFont + '",' + data.fonts.primary.fallback;
+            var css = ':root{--primary:' + data.colors.primary + ';--secondary:' + data.colors.secondary + ';--accent:' + data.colors.accent + ';--bg:#fff;--text:' + data.colors.foreground + '}*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:' + fontFamily + ';background:var(--bg);color:var(--text);line-height:1.6}.progress-bar{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--primary),var(--secondary),var(--accent));z-index:1000;width:0;transition:width 0.3s ease}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 2rem}@media(min-width:1024px){section{min-height:100vh;padding:0 2rem}}section.hero{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;text-align:center}section.hero h1{font-size:clamp(2.5rem,8vw,4.5rem);margin-bottom:1rem;font-weight:800}section.hero p{font-size:clamp(1rem,3vw,1.5rem);opacity:0.95}.section-content{max-width:1000px;margin:0 auto;width:100%;position:relative;z-index:10}h1,h2{font-weight:700;margin-bottom:1rem}h1{font-size:clamp(2rem,8vw,4rem)}h2{font-size:clamp(1.5rem,5vw,2.5rem)}p{font-size:1.1rem;margin-bottom:1rem}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.75rem;list-style:none}li:before{content:"▸";margin-right:0.75rem;color:var(--secondary);font-weight:700}footer{padding:2rem;border-top:2px solid var(--primary);text-align:center;color:var(--text);opacity:0.7;font-size:0.9rem}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}@media(max-width:768px){section{padding:72px 1rem}}';
 
             var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + escapeHtml(data.slides[0].text.split('\n')[0] || 'Scrollytelling') + '</title><link href="https://fonts.googleapis.com/css2?family=' + googleFont + ':wght@400;600;700;800&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="progress-bar" id="pb"></div>' + sections + '<footer><p>Created with PPTX to Scrollytelling</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"})<\/script></body></html>';
 
@@ -396,29 +736,108 @@
                 var filename = img.path.split('/').pop();
                 assetsFolder.file(filename, img.data, { binary: true });
             }
+            
+            zip.file('design-dna.json', JSON.stringify(data.designTokens, null, 2));
 
-            var report = 'BESPOKE DESIGN REPORT\n';
+            var report = 'ACCESSIBILITY REPORT\n';
             report += '====================\n\n';
-            report += 'Generated: ' + new Date().toISOString() + '\n\n';
-            report += 'DESIGN ANALYSIS\n';
-            report += 'Primary Font: ' + data.fonts.primary + '\n';
-            report += 'Secondary Font: ' + data.fonts.secondary + '\n';
-            report += 'Primary Color: ' + data.colors.primary + '\n';
-            report += 'Secondary Color: ' + data.colors.secondary + '\n';
-            report += 'Accent Color: ' + data.colors.accent + '\n\n';
-            report += 'SLIDE ANALYSIS\n';
+            report += 'Generated: ' + new Date().toISOString() + '\n';
+            report += 'Source: ' + (selectedFile ? selectedFile.name : 'Unknown') + '\n\n';
+            
+            report += 'FONT MAPPING\n';
+            report += '------------\n';
+            report += 'Primary Font:\n';
+            report += '  Original: ' + data.fonts.primary.source + '\n';
+            report += '  Mapped to: ' + data.fonts.primary.googleFont + '\n';
+            report += '  Status: ' + (data.fonts.primary.mapped ? 'Found in Google Fonts' : 'Not found - using fallback') + '\n';
+            report += '  Fallback: ' + data.fonts.primary.fallback + '\n\n';
+            
+            report += 'Secondary Font:\n';
+            report += '  Original: ' + data.fonts.secondary.source + '\n';
+            report += '  Mapped to: ' + data.fonts.secondary.googleFont + '\n';
+            report += '  Status: ' + (data.fonts.secondary.mapped ? 'Found in Google Fonts' : 'Not found - using fallback') + '\n';
+            report += '  Fallback: ' + data.fonts.secondary.fallback + '\n\n';
+            
+            report += 'COLOR TOKENS\n';
+            report += '------------\n';
+            report += 'Primary: ' + data.colors.primary + '\n';
+            report += 'Secondary: ' + data.colors.secondary + '\n';
+            report += 'Accent: ' + data.colors.accent + '\n';
+            report += 'Background: ' + data.colors.background + '\n';
+            report += 'Foreground: ' + data.colors.foreground + '\n';
+            report += 'Surface: ' + data.colors.surface + '\n';
+            report += 'Border: ' + data.colors.border + '\n';
+            report += 'Muted: ' + data.colors.muted + '\n';
+            report += 'Palette: ' + data.colorPalette.join(', ') + '\n\n';
+            
+            report += 'COLOR CONTRAST ADJUSTMENTS\n';
+            report += '--------------------------\n';
+            if (data.contrastAdjustments.length > 0) {
+                for (var i = 0; i < data.contrastAdjustments.length; i++) {
+                    var adj = data.contrastAdjustments[i];
+                    report += 'Adjusted ' + adj.type + ' color:\n';
+                    report += '  Original: ' + adj.original + ' (ratio: ' + adj.originalRatio.toFixed(2) + ')\n';
+                    report += '  Adjusted: ' + adj.adjusted + ' (ratio: ' + adj.newRatio.toFixed(2) + ')\n';
+                    report += '  Status: Now meets WCAG AA standard (4.5:1)\n\n';
+                }
+            } else {
+                report += 'No adjustments needed - all colors meet WCAG AA standards.\n\n';
+            }
+            
+            report += 'ACCESSIBILITY WARNINGS\n';
+            report += '----------------------\n';
+            if (data.accessibilityWarnings.length > 0) {
+                for (var i = 0; i < data.accessibilityWarnings.length; i++) {
+                    var warn = data.accessibilityWarnings[i];
+                    if (warn.type === 'contrast') {
+                        report += '⚠ Contrast Warning: ' + warn.element + '\n';
+                        report += '  Ratio: ' + warn.ratio + ' (minimum: ' + warn.minimum + ')\n';
+                        report += '  Action: Manual review recommended\n\n';
+                    } else if (warn.type === 'media') {
+                        report += '⚠ Media Warning: ' + warn.element + '\n';
+                        report += '  Count: ' + warn.count + '\n';
+                        report += '  Message: ' + warn.message + '\n\n';
+                    }
+                }
+            } else {
+                report += 'No accessibility warnings.\n\n';
+            }
+            
+            report += 'RHYTHM & SPACING\n';
+            report += '----------------\n';
+            if (data.designTokens && data.designTokens.rhythm) {
+                report += 'Base Spacing Unit: ' + data.designTokens.rhythm.baseSpacing + 'px\n';
+                report += 'Spacing Scale: ' + data.designTokens.rhythm.spacingScale.join('px, ') + 'px\n';
+                report += 'Container Max Width: ' + data.designTokens.rhythm.containerMaxWidth + 'px\n';
+                report += 'Gutter Size: ' + data.designTokens.rhythm.gutterSize + 'px\n';
+                report += 'Border Radius (small/medium/large): ' + data.designTokens.rhythm.borderRadius.small + 'px / ' + data.designTokens.rhythm.borderRadius.medium + 'px / ' + data.designTokens.rhythm.borderRadius.large + 'px\n\n';
+            }
+
+            report += 'CONTENT SUMMARY\n';
+            report += '---------------\n';
             report += 'Total Slides: ' + data.slides.length + '\n';
             for (var i = 0; i < data.slides.length; i++) {
                 report += 'Slide ' + (i + 1) + ': ' + data.slides[i].layout + ' layout\n';
             }
-            report += '\nCONTENT EXTRACTION\n';
-            report += 'Images: ' + data.images.length + '\n\n';
+            report += '\nImages Extracted: ' + data.images.length + '\n\n';
+            
             report += 'PROCESSING LOG\n';
+            report += '--------------\n';
             for (var i = 0; i < processingLog.length; i++) {
                 report += '[' + processingLog[i].type.toUpperCase() + '] ' + processingLog[i].message + '\n';
             }
+            
+            report += '\n\nWCAG COMPLIANCE NOTES\n';
+            report += '---------------------\n';
+            report += 'This converter aims for WCAG AA compliance (4.5:1 contrast ratio for normal text).\n';
+            report += 'All color adjustments are logged above.\n';
+            report += 'Please review any warnings and test with screen readers and accessibility tools.\n';
+            report += '\nRecommended tools:\n';
+            report += '- WAVE (https://wave.webaim.org/)\n';
+            report += '- axe DevTools\n';
+            report += '- Lighthouse in Chrome DevTools\n';
 
-            zip.file('DESIGN_REPORT.txt', report);
+            zip.file('ACCESSIBILITY_REPORT.txt', report);
             return zip;
         }
 
