@@ -328,7 +328,7 @@
 
         <div class="preview" id="prev">
             <h3>Preview</h3>
-            <iframe id="iframe" sandbox="allow-same-origin" title="Preview of generated scrollytelling site"></iframe>
+            <iframe id="iframe" sandbox="allow-same-origin allow-scripts" title="Preview of generated scrollytelling site"></iframe>
             <div style="margin-top: 1rem; display: flex; gap: 1rem;">
                 <button class="btn-sec" id="edit" style="flex: 1;">Edit</button>
                 <button class="btn-main" id="down" style="flex: 1;">Download</button>
@@ -353,6 +353,7 @@
         var file = null, theme = 'cyber', html = null, zip = null, cancelled = false;
         var slideData = [];
         var summaryData = { slides: 0, images: [], warnings: [], errors: [] };
+        var hasTextOverBackground = false;  // Track if text appears over background images
         
         // DOM elements
         var drop = document.getElementById('drop');
@@ -677,7 +678,17 @@
                         continue;
                     }
                     
-                    var imagePath = 'ppt/slides/' + target.replace('../', '');
+                    // Resolve path: targets are relative to ppt/slides/
+                    // If target starts with ../,  resolve against ppt/
+                    var imagePath;
+                    if (target.startsWith('../')) {
+                        // Remove ../ and prepend ppt/
+                        imagePath = 'ppt/' + target.substring(3);
+                    } else {
+                        // Relative to ppt/slides/
+                        imagePath = 'ppt/slides/' + target;
+                    }
+                    
                     var imageFile = zipFile.file(imagePath);
                     
                     if (imageFile) {
@@ -852,6 +863,14 @@
                 var heading = slide.text.heading ? '<h2>' + escapeHtml(slide.text.heading) + '</h2>' : '';
                 var content = '';
                 
+                // Generate stable ID for heading and aria-labelledby for section
+                var slideId = 'slide-' + (i + 1) + '-title';
+                var ariaLabel = '';
+                if (slide.text.heading) {
+                    heading = '<h2 id="' + slideId + '">' + escapeHtml(slide.text.heading) + '</h2>';
+                    ariaLabel = ' aria-labelledby="' + slideId + '"';
+                }
+                
                 if (slide.text.content.length > 0) {
                     var bullets = [];
                     var paras = [];
@@ -875,11 +894,12 @@
                     }
                 }
                 
-                secs += '<section style="' + bgStyle + '"><div class="ov"></div><div class="con">' + heading + content + inlineImages + '</div></section>';
+                // Build section with aria-labelledby if heading exists
+                secs += '<section' + ariaLabel + ' style="' + bgStyle + '"><div class="ov"></div><div class="con">' + heading + content + inlineImages + '</div></section>';
             }
 
             // Check if any slides have text over background images
-            var hasTextOverBackground = false;
+            hasTextOverBackground = false;  // Reset global state
             for (var i = 0; i < slides.length; i++) {
                 if (slides[i].images.length > 0 && (slides[i].text.heading || slides[i].text.content.length > 0)) {
                     hasTextOverBackground = true;
@@ -1013,8 +1033,8 @@
                 // Add index.html
                 outputZip.file('index.html', html);
                 
-                // Generate accessibility report
-                var accessibilityReport = generateAccessibilityReport(slideData);
+                // Generate accessibility report with correct arguments
+                var accessibilityReport = generateAccessibilityReport(slideData, hasTextOverBackground);
                 outputZip.file('ACCESSIBILITY_REPORT.txt', accessibilityReport);
                 
                 // Generate the zip
