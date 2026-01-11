@@ -41,71 +41,133 @@
         .preview.show { display: block; }
         .preview h3 { color: #00d9ff; margin-bottom: 1rem; }
         .preview iframe { width: 100%; height: 500px; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; background: white; }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .styles-section { display: none; padding: 2rem; border-radius: 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem; }
+        .styles-section.show { display: block; }
+        .styles-section h3 { color: #00d9ff; margin-bottom: 1.5rem; font-size: 1.2rem; }
+        .style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .style-item { margin-bottom: 1rem; }
+        .style-item label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: 600; }
+        .color-input-group { display: flex; gap: 0.5rem; align-items: center; }
+        .color-input-group input[type="color"] { width: 60px; height: 40px; border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; cursor: pointer; background: transparent; }
+        .color-input-group input[type="text"] { flex: 1; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #f5f5f5; font-family: 'Titillium Web', sans-serif; font-size: 0.9rem; }
+        .font-input { width: 100%; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #f5f5f5; font-family: 'Titillium Web', sans-serif; }
+        input:focus, button:focus, select:focus { outline: 2px solid #00d9ff; outline-offset: 2px; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .style-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-    <div class="container">
+    <a href="#main-content" class="sr-only">Skip to main content</a>
+    <div class="container" id="main-content">
         <h1>PPTX to Scrollytelling</h1>
         <p class="subtitle">Convert your PowerPoint to an interactive scrollytelling site</p>
 
         <div class="grid">
             <div class="box">
                 <h2>Upload PPTX</h2>
-                <div class="drop" id="drop">
+                <div class="drop" id="drop" role="button" tabindex="0" aria-label="Upload PPTX file - click or drag and drop">
                     <div style="font-size: 2.5rem; margin-bottom: 1rem;">📤</div>
                     <p><strong>Drag & drop PPTX here</strong></p>
                     <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem; margin-top: 0.5rem;">or click to browse</p>
-                    <input type="file" id="file" style="display: none;" accept=".pptx">
+                    <input type="file" id="file" style="display: none;" accept=".pptx" aria-label="File input for PPTX">
                 </div>
-                <div class="file-info" id="info"></div>
-                <div class="msg" id="status"></div>
+                <div class="file-info" id="info" role="status" aria-live="polite"></div>
+                <div class="msg" id="status" role="alert" aria-live="assertive"></div>
             </div>
 
             <div class="box">
                 <h2>Customize</h2>
                 <div class="form-group">
-                    <label>Site Title</label>
-                    <input type="text" id="title" value="Driving Meaningful Health Change">
+                    <label for="title">Site Title</label>
+                    <input type="text" id="title" value="Driving Meaningful Health Change" aria-label="Site title input">
                 </div>
                 <div class="form-group">
-                    <label>Copyright</label>
-                    <input type="text" id="copy" value="© 2026 The Gaf NYC">
+                    <label for="copy">Copyright</label>
+                    <input type="text" id="copy" value="© 2026 The Gaf NYC" aria-label="Copyright text input">
                 </div>
-                <div class="form-group">
-                    <label>Theme</label>
-                    <div class="colors">
-                        <button class="color-btn active" data-t="cyber" style="background: linear-gradient(135deg, #0f0a1a, #1a0a2e); color: #00d9ff;">Cyber</button>
-                        <button class="color-btn" data-t="ocean" style="background: linear-gradient(135deg, #0a1f2e, #1a3a4a); color: #00d9ff;">Ocean</button>
-                        <button class="color-btn" data-t="forest" style="background: linear-gradient(135deg, #0a2e1a, #1a4a2e); color: #22c55e;">Forest</button>
-                        <button class="color-btn" data-t="sunset" style="background: linear-gradient(135deg, #2e1a0a, #4a2e1a); color: #f97316;">Sunset</button>
+            </div>
+        </div>
+
+        <div class="styles-section" id="stylesSection" role="region" aria-label="Extracted styles from PPTX">
+            <h3>Extracted Styles from PPTX</h3>
+            <div class="style-grid">
+                <div>
+                    <h4 style="color: rgba(255,255,255,0.8); font-size: 1rem; margin-bottom: 1rem;">Colors</h4>
+                    <div class="style-item">
+                        <label for="colorBg1">Background 1</label>
+                        <div class="color-input-group">
+                            <input type="color" id="colorBg1" aria-label="Background color 1 picker">
+                            <input type="text" id="colorBg1Text" aria-label="Background color 1 hex value" pattern="^#[0-9A-Fa-f]{6}$">
+                        </div>
+                    </div>
+                    <div class="style-item">
+                        <label for="colorBg2">Background 2</label>
+                        <div class="color-input-group">
+                            <input type="color" id="colorBg2" aria-label="Background color 2 picker">
+                            <input type="text" id="colorBg2Text" aria-label="Background color 2 hex value" pattern="^#[0-9A-Fa-f]{6}$">
+                        </div>
+                    </div>
+                    <div class="style-item">
+                        <label for="colorPrimary">Primary Color</label>
+                        <div class="color-input-group">
+                            <input type="color" id="colorPrimary" aria-label="Primary color picker">
+                            <input type="text" id="colorPrimaryText" aria-label="Primary color hex value" pattern="^#[0-9A-Fa-f]{6}$">
+                        </div>
+                    </div>
+                    <div class="style-item">
+                        <label for="colorSecondary">Secondary Color</label>
+                        <div class="color-input-group">
+                            <input type="color" id="colorSecondary" aria-label="Secondary color picker">
+                            <input type="text" id="colorSecondaryText" aria-label="Secondary color hex value" pattern="^#[0-9A-Fa-f]{6}$">
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h4 style="color: rgba(255,255,255,0.8); font-size: 1rem; margin-bottom: 1rem;">Fonts</h4>
+                    <div class="style-item">
+                        <label for="fontHeading">Heading Font</label>
+                        <input type="text" class="font-input" id="fontHeading" aria-label="Heading font name" placeholder="e.g., Arial, Helvetica">
+                    </div>
+                    <div class="style-item">
+                        <label for="fontBody">Body Font</label>
+                        <input type="text" class="font-input" id="fontBody" aria-label="Body font name" placeholder="e.g., Arial, Helvetica">
+                    </div>
+                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(0,217,255,0.1); border-radius: 0.5rem; border-left: 3px solid #00d9ff;">
+                        <p style="font-size: 0.85rem; color: rgba(255,255,255,0.7);">
+                            <strong>Note:</strong> Fonts are extracted from your PPTX file. You can edit them here before generating the preview.
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="load" style="display: none; text-align: center; padding: 2rem;">
+        <div id="load" style="display: none; text-align: center; padding: 2rem;" role="status" aria-live="polite"
+            aria-label="Processing status">
             <div class="spin"></div>
             <p id="loadtxt">Processing...</p>
         </div>
 
-        <div class="preview" id="prev">
+        <div class="preview" id="prev" role="region" aria-label="Generated preview">
             <h3>Preview</h3>
-            <iframe id="iframe" sandbox="allow-same-origin"></iframe>
+            <iframe id="iframe" sandbox="allow-same-origin" title="Preview of generated scrollytelling site"></iframe>
             <div style="margin-top: 1rem; display: flex; gap: 1rem;">
-                <button class="btn-sec" id="edit" style="flex: 1;">Edit</button>
-                <button class="btn-main" id="down" style="flex: 1;">Download</button>
+                <button class="btn-sec" id="edit" style="flex: 1;" aria-label="Edit settings and regenerate">Edit</button>
+                <button class="btn-main" id="down" style="flex: 1;" aria-label="Download generated HTML file">Download</button>
             </div>
         </div>
 
         <div class="buttons">
-            <button class="btn-main" id="gen" disabled>Generate Preview</button>
-            <button class="btn-sec" id="reset">Reset</button>
+            <button class="btn-main" id="gen" disabled aria-label="Generate preview from uploaded PPTX file">Generate Preview</button>
+            <button class="btn-sec" id="reset" aria-label="Reset form and clear all inputs">Reset</button>
         </div>
     </div>
 
     <script>
-        var file = null, theme = 'cyber', html = null, zip = null;
+        var file = null, html = null, zip = null;
+        var extractedStyles = {
+            colors: {bg1: '#0f0a1a', bg2: '#1a0a2e', p: '#00d9ff', s: '#a855f7'},
+            fonts: {heading: 'Titillium Web', body: 'Titillium Web'}
+        };
         var drop = document.getElementById('drop');
         var inp = document.getElementById('file');
         var info = document.getElementById('info');
@@ -120,18 +182,82 @@
         var titleinp = document.getElementById('title');
         var copyinp = document.getElementById('copy');
 
-        var themes = {
-            cyber: {bg1: '#0f0a1a', bg2: '#1a0a2e', p: '#00d9ff', s: '#a855f7'},
-            ocean: {bg1: '#0a1f2e', bg2: '#1a3a4a', p: '#00d9ff', s: '#0ea5e9'},
-            forest: {bg1: '#0a2e1a', bg2: '#1a4a2e', p: '#22c55e', s: '#10b981'},
-            sunset: {bg1: '#2e1a0a', bg2: '#4a2e1a', p: '#f97316', s: '#fb923c'}
-        };
-
         drop.onclick = function() { inp.click(); };
+        drop.onkeydown = function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inp.click(); } };
         drop.ondragover = function(e) { e.preventDefault(); drop.classList.add('over'); };
         drop.ondragleave = function() { drop.classList.remove('over'); };
         drop.ondrop = function(e) { e.preventDefault(); drop.classList.remove('over'); handleFile(e.dataTransfer.files[0]); };
         inp.onchange = function(e) { handleFile(e.target.files[0]); };
+
+        // Sanitization functions
+        function sanitizeColor(color) {
+            if (!color) return '#000000';
+            color = color.trim();
+            if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
+                return '#000000';
+            }
+            return color;
+        }
+
+        function sanitizeFont(font) {
+            if (!font) return 'Arial';
+            // Remove any potentially dangerous characters
+            return font.replace(/[<>'"\\]/g, '').trim() || 'Arial';
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Color input synchronization
+        function setupColorInput(colorPickerId, textInputId, styleKey) {
+            var picker = document.getElementById(colorPickerId);
+            var text = document.getElementById(textInputId);
+            
+            picker.addEventListener('input', function() {
+                text.value = picker.value.toUpperCase();
+                extractedStyles.colors[styleKey] = sanitizeColor(picker.value);
+            });
+            
+            text.addEventListener('input', function() {
+                var sanitized = sanitizeColor(text.value);
+                if (text.value && /^#[0-9A-Fa-f]{6}$/.test(text.value)) {
+                    picker.value = text.value;
+                    extractedStyles.colors[styleKey] = sanitized;
+                }
+            });
+        }
+
+        // Font input handlers
+        function setupFontInput(inputId, styleKey) {
+            var input = document.getElementById(inputId);
+            input.addEventListener('input', function() {
+                extractedStyles.fonts[styleKey] = sanitizeFont(input.value);
+            });
+        }
+
+        // Initialize color and font inputs
+        setupColorInput('colorBg1', 'colorBg1Text', 'bg1');
+        setupColorInput('colorBg2', 'colorBg2Text', 'bg2');
+        setupColorInput('colorPrimary', 'colorPrimaryText', 'p');
+        setupColorInput('colorSecondary', 'colorSecondaryText', 's');
+        setupFontInput('fontHeading', 'heading');
+        setupFontInput('fontBody', 'body');
+
+        function updateStylesUI() {
+            document.getElementById('colorBg1').value = extractedStyles.colors.bg1;
+            document.getElementById('colorBg1Text').value = extractedStyles.colors.bg1;
+            document.getElementById('colorBg2').value = extractedStyles.colors.bg2;
+            document.getElementById('colorBg2Text').value = extractedStyles.colors.bg2;
+            document.getElementById('colorPrimary').value = extractedStyles.colors.p;
+            document.getElementById('colorPrimaryText').value = extractedStyles.colors.p;
+            document.getElementById('colorSecondary').value = extractedStyles.colors.s;
+            document.getElementById('colorSecondaryText').value = extractedStyles.colors.s;
+            document.getElementById('fontHeading').value = extractedStyles.fonts.heading;
+            document.getElementById('fontBody').value = extractedStyles.fonts.body;
+        }
 
         function handleFile(f) {
             if (!f || !f.name.endsWith('.pptx')) {
@@ -140,61 +266,174 @@
                 return;
             }
             file = f;
-            info.textContent = 'OK ' + f.name;
+            info.textContent = '✓ ' + f.name;
             info.style.display = 'block';
-            gen.disabled = false;
-            status.textContent = 'Ready to process';
+            status.textContent = 'Extracting styles from PPTX...';
             status.className = 'msg show ok';
+            
+            // Extract styles from PPTX
+            extractStylesFromPPTX(f);
         }
 
-        document.querySelectorAll('.color-btn').forEach(function(btn) {
-            btn.onclick = function() {
-                document.querySelectorAll('.color-btn').forEach(function(b) { b.classList.remove('active'); });
-                btn.classList.add('active');
-                theme = btn.dataset.t;
+        function extractStylesFromPPTX(f) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                JSZip.loadAsync(e.target.result).then(function(z) {
+                    // Try to extract theme colors and fonts
+                    var themeFile = z.file('ppt/theme/theme1.xml');
+                    
+                    if (themeFile) {
+                        themeFile.async('string').then(function(xml) {
+                            parseThemeXML(xml);
+                            updateStylesUI();
+                            document.getElementById('stylesSection').classList.add('show');
+                            gen.disabled = false;
+                            status.textContent = 'Styles extracted! Review and edit below, then generate preview.';
+                            status.className = 'msg show ok';
+                        }).catch(function(err) {
+                            // Fallback to defaults if theme parsing fails
+                            console.warn('Theme parsing error:', err);
+                            useDefaultStyles();
+                        });
+                    } else {
+                        // No theme file, use defaults
+                        useDefaultStyles();
+                    }
+                }).catch(function(e) {
+                    status.textContent = 'Error reading PPTX: ' + e.message;
+                    status.className = 'msg show err';
+                });
             };
-        });
+            reader.readAsArrayBuffer(f);
+        }
+
+        function parseThemeXML(xml) {
+            try {
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(xml, 'text/xml');
+                
+                // Extract color scheme
+                var clrScheme = doc.querySelector('clrScheme');
+                if (clrScheme) {
+                    // Try to extract accent colors
+                    var dk1 = clrScheme.querySelector('dk1 srgbClr, dk1 sysClr');
+                    var dk2 = clrScheme.querySelector('dk2 srgbClr, dk2 sysClr');
+                    var accent1 = clrScheme.querySelector('accent1 srgbClr, accent1 sysClr');
+                    var accent2 = clrScheme.querySelector('accent2 srgbClr, accent2 sysClr');
+                    
+                    if (dk1) {
+                        var val = dk1.getAttribute('val') || dk1.getAttribute('lastClr');
+                        if (val) extractedStyles.colors.bg1 = '#' + val;
+                    }
+                    if (dk2) {
+                        var val = dk2.getAttribute('val') || dk2.getAttribute('lastClr');
+                        if (val) extractedStyles.colors.bg2 = '#' + val;
+                    }
+                    if (accent1) {
+                        var val = accent1.getAttribute('val') || accent1.getAttribute('lastClr');
+                        if (val) extractedStyles.colors.p = '#' + val;
+                    }
+                    if (accent2) {
+                        var val = accent2.getAttribute('val') || accent2.getAttribute('lastClr');
+                        if (val) extractedStyles.colors.s = '#' + val;
+                    }
+                }
+                
+                // Extract font scheme
+                var fontScheme = doc.querySelector('fontScheme');
+                if (fontScheme) {
+                    var majorFont = fontScheme.querySelector('majorFont latin');
+                    var minorFont = fontScheme.querySelector('minorFont latin');
+                    
+                    if (majorFont) {
+                        var typeface = majorFont.getAttribute('typeface');
+                        if (typeface) extractedStyles.fonts.heading = typeface;
+                    }
+                    if (minorFont) {
+                        var typeface = minorFont.getAttribute('typeface');
+                        if (typeface) extractedStyles.fonts.body = typeface;
+                    }
+                }
+            } catch (err) {
+                console.warn('Error parsing theme XML:', err);
+                useDefaultStyles();
+            }
+        }
+
+        function useDefaultStyles() {
+            extractedStyles = {
+                colors: {bg1: '#0f0a1a', bg2: '#1a0a2e', p: '#00d9ff', s: '#a855f7'},
+                fonts: {heading: 'Titillium Web', body: 'Titillium Web'}
+            };
+            updateStylesUI();
+            document.getElementById('stylesSection').classList.add('show');
+            gen.disabled = false;
+            status.textContent = 'Using default styles. You can customize them below.';
+            status.className = 'msg show ok';
+        }
 
         gen.onclick = function() {
             if (!file) return;
             load.style.display = 'block';
+            document.getElementById('loadtxt').textContent = 'Processing PPTX...';
             gen.disabled = true;
             
             var reader = new FileReader();
             reader.onload = function(e) {
                 JSZip.loadAsync(e.target.result).then(function(z) {
-                    var slideFolder = z.folder('ppt/slides');
-                    if (!slideFolder) {
-                        status.textContent = 'No slides found';
+                    // Check if slides folder exists
+                    var slideFiles = Object.keys(z.files).filter(function(f) { 
+                        return f.match(/^ppt\/slides\/slide\d+\.xml$/); 
+                    });
+                    
+                    if (slideFiles.length === 0) {
+                        status.textContent = 'Error: No slides found in PPTX file';
                         status.className = 'msg show err';
                         load.style.display = 'none';
                         gen.disabled = false;
                         return;
                     }
 
+                    slideFiles.sort();
                     var slides = [];
-                    var files = Object.keys(slideFolder.files).filter(function(f) { return f.match(/slide\d+\.xml$/); }).sort();
-                    
                     var count = 0;
-                    files.forEach(function(f) {
-                        slideFolder.file(f).async('string').then(function(xml) {
+                    
+                    document.getElementById('loadtxt').textContent = 'Extracting slide content... (0/' + slideFiles.length + ')';
+                    
+                    slideFiles.forEach(function(f) {
+                        var slideFile = z.file(f);
+                        
+                        // Add null check to prevent "Cannot read properties of null" error
+                        if (!slideFile) {
+                            console.warn('Slide file not found:', f);
+                            count++;
+                            if (count === slideFiles.length) {
+                                finishProcessing(slides, z);
+                            }
+                            return;
+                        }
+                        
+                        slideFile.async('string').then(function(xml) {
                             var parser = new DOMParser();
                             var doc = parser.parseFromString(xml, 'text/xml');
-                            var texts = doc.querySelectorAll('a:t');
+                            var texts = doc.querySelectorAll('a\\:t, t');
                             var txt = '';
-                            texts.forEach(function(t) { txt += t.textContent + ' '; });
+                            texts.forEach(function(t) { 
+                                txt += escapeHtml(t.textContent) + ' '; 
+                            });
                             slides.push({text: txt.trim()});
                             
                             count++;
-                            if (count === files.length) {
-                                html = makeHTML(slides);
-                                zip = z;
-                                iframe.srcdoc = html;
-                                prev.classList.add('show');
-                                load.style.display = 'none';
-                                gen.disabled = false;
-                                status.textContent = 'Preview ready';
-                                status.className = 'msg show ok';
+                            document.getElementById('loadtxt').textContent = 'Extracting slide content... (' + count + '/' + slideFiles.length + ')';
+                            
+                            if (count === slideFiles.length) {
+                                finishProcessing(slides, z);
+                            }
+                        }).catch(function(err) {
+                            console.error('Error processing slide:', f, err);
+                            count++;
+                            if (count === slideFiles.length) {
+                                finishProcessing(slides, z);
                             }
                         });
                     });
@@ -208,34 +447,63 @@
             reader.readAsArrayBuffer(file);
         };
 
+        function finishProcessing(slides, z) {
+            document.getElementById('loadtxt').textContent = 'Generating preview...';
+            setTimeout(function() {
+                html = makeHTML(slides);
+                zip = z;
+                iframe.srcdoc = html;
+                prev.classList.add('show');
+                load.style.display = 'none';
+                gen.disabled = false;
+                status.textContent = 'Preview ready! Extracted ' + slides.length + ' slide(s).';
+                status.className = 'msg show ok';
+            }, 500);
+        }
+
         function makeHTML(slides) {
-            var t = themes[theme];
+            var t = extractedStyles.colors;
+            var fonts = extractedStyles.fonts;
             var secs = '';
+            var sanitizedTitle = escapeHtml(titleinp.value);
+            var sanitizedCopy = escapeHtml(copyinp.value);
+            
             for (var i = 0; i < slides.length; i++) {
                 secs += '<section><div class="ov"></div><div class="con"><h2>Section ' + (i+1) + '</h2><p>' + slides[i].text + '</p></div></section>';
             }
 
-            var css = '*{margin:0;padding:0;box-sizing:border-box}:root{--p:' + t.p + ';--s:' + t.s + ';--b1:' + t.bg1 + ';--b2:' + t.bg2 + '}html{scroll-behavior:smooth}body{font-family:Titillium Web,sans-serif;background:linear-gradient(135deg,var(--b1),var(--b2));color:#f5f5f5;line-height:1.6}.pb{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--p),var(--s));z-index:1000;width:0;transition:width 0.3s}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 0}@media(min-width:1024px){section{min-height:100vh;padding:0}}.con{max-width:1200px;margin:0 auto;padding:2rem;width:100%;position:relative;z-index:10}h1{font-size:clamp(2.5rem,8vw,5rem);font-weight:700;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--p),#fff,var(--s));-webkit-background-clip:text;-webkit-text-fill-color:transparent}h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;margin-bottom:2rem}p{font-size:1.1rem;color:rgba(255,255,255,0.8);margin-bottom:1rem}.ov{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,rgba(26,10,46,0.8),rgba(26,10,46,0.6));z-index:2}#hero{background:linear-gradient(135deg,var(--b1),var(--b2))}.hc{text-align:center;animation:fadeIn 1s}@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}footer{padding:2rem;border-top:1px solid rgba(255,255,255,0.1);text-align:center;color:rgba(255,255,255,0.5)}';
+            var fontImport = '';
+            if (fonts.heading === fonts.body) {
+                fontImport = '<link href="https://fonts.googleapis.com/css2?family=' + encodeURIComponent(sanitizeFont(fonts.heading)) + ':wght@400;600;700&display=swap" rel="stylesheet">';
+            } else {
+                fontImport = '<link href="https://fonts.googleapis.com/css2?family=' + encodeURIComponent(sanitizeFont(fonts.heading)) + ':wght@400;600;700&family=' + encodeURIComponent(sanitizeFont(fonts.body)) + ':wght@400;600&display=swap" rel="stylesheet">';
+            }
 
-            var result = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + titleinp.value + '</title><link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="pb" id="pb"></div><section id="hero"><div class="ov"></div><div class="con"><div class="hc"><h1>' + titleinp.value + '</h1><p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p></div></div></section>' + secs + '<footer><p>' + copyinp.value + '</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"})<\/script></body></html>';
+            var css = '*{margin:0;padding:0;box-sizing:border-box}:root{--p:' + sanitizeColor(t.p) + ';--s:' + sanitizeColor(t.s) + ';--b1:' + sanitizeColor(t.bg1) + ';--b2:' + sanitizeColor(t.bg2) + ';--font-heading:' + sanitizeFont(fonts.heading) + ',sans-serif;--font-body:' + sanitizeFont(fonts.body) + ',sans-serif}html{scroll-behavior:smooth}body{font-family:var(--font-body);background:linear-gradient(135deg,var(--b1),var(--b2));color:#f5f5f5;line-height:1.6}.pb{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--p),var(--s));z-index:1000;width:0;transition:width 0.3s}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 0}@media(min-width:1024px){section{min-height:100vh;padding:0}}.con{max-width:1200px;margin:0 auto;padding:2rem;width:100%;position:relative;z-index:10}h1{font-family:var(--font-heading);font-size:clamp(2.5rem,8vw,5rem);font-weight:700;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--p),#fff,var(--s));-webkit-background-clip:text;-webkit-text-fill-color:transparent}h2{font-family:var(--font-heading);font-size:clamp(2rem,5vw,3.5rem);font-weight:700;margin-bottom:2rem}p{font-size:1.1rem;color:rgba(255,255,255,0.8);margin-bottom:1rem}.ov{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,rgba(26,10,46,0.8),rgba(26,10,46,0.6));z-index:2}#hero{background:linear-gradient(135deg,var(--b1),var(--b2))}.hc{text-align:center;animation:fadeIn 1s}@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}footer{padding:2rem;border-top:1px solid rgba(255,255,255,0.1);text-align:center;color:rgba(255,255,255,0.5)}';
+
+            var result = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + sanitizedTitle + '</title>' + fontImport + '<style>' + css + '</style></head><body><div class="pb" id="pb" role="progressbar" aria-label="Page scroll progress"></div><section id="hero"><div class="ov"></div><div class="con"><div class="hc"><h1>' + sanitizedTitle + '</h1><p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p></div></div></section>' + secs + '<footer><p>' + sanitizedCopy + '</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;var p=document.getElementById("pb");if(p){p.style.width=(t/h*100)+"%";p.setAttribute("aria-valuenow",Math.round(t/h*100))}})<\/script></body></html>';
 
             return result;
         }
 
         down.onclick = function() {
-            if (!zip) return;
+            if (!html) return;
             down.disabled = true;
-            zip.generateAsync({type: 'blob'}).then(function(blob) {
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url;
-                a.download = 'scrollytelling.zip';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                down.disabled = false;
-            });
+            
+            // Create a blob from the HTML content
+            var blob = new Blob([html], {type: 'text/html'});
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'scrollytelling.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            down.disabled = false;
+            
+            status.textContent = 'Download complete!';
+            status.className = 'msg show ok';
         };
 
         edit.onclick = function() {
@@ -250,11 +518,14 @@
             gen.disabled = true;
             status.classList.remove('show');
             prev.classList.remove('show');
+            document.getElementById('stylesSection').classList.remove('show');
             titleinp.value = 'Driving Meaningful Health Change';
             copyinp.value = '© 2026 The Gaf NYC';
-            theme = 'cyber';
-            document.querySelectorAll('.color-btn').forEach(function(b) { b.classList.remove('active'); });
-            document.querySelectorAll('.color-btn')[0].classList.add('active');
+            extractedStyles = {
+                colors: {bg1: '#0f0a1a', bg2: '#1a0a2e', p: '#00d9ff', s: '#a855f7'},
+                fonts: {heading: 'Titillium Web', body: 'Titillium Web'}
+            };
+            updateStylesUI();
         };
     </script>
 </body>
