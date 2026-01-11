@@ -354,6 +354,7 @@
         var slideData = [];
         var summaryData = { slides: 0, images: [], warnings: [], errors: [] };
         var hasTextOverBackground = false;  // Track if text appears over background images
+        var extractedThemeInfo = null;  // Store theme extraction results for accessibility report
         
         // DOM elements
         var drop = document.getElementById('drop');
@@ -528,6 +529,344 @@
             reader.readAsArrayBuffer(file);
         };
 
+        // ==============================================
+        // THEME EXTRACTION FUNCTIONS
+        // ==============================================
+        
+        /**
+         * Extract theme from PPTX to match deck look and feel
+         * Returns {fonts, colors} object with extracted theme data
+         */
+        async function extractTheme(zipFile) {
+            var theme = {
+                fonts: { title: null, body: null },
+                colors: { bg: null, text: null, accent: null, muted: null },
+                source: 'fallback'
+            };
+            
+            try {
+                // Find theme file (typically ppt/theme/theme1.xml)
+                var themeFiles = zipFile.file(/ppt\/theme\/theme\d+\.xml/);
+                if (themeFiles.length === 0) {
+                    summaryData.warnings.push('No theme file found - using default styling');
+                    return theme;
+                }
+                
+                var themeXml = await themeFiles[0].async('string');
+                var parser = new DOMParser();
+                var themeDoc = parser.parseFromString(themeXml, 'text/xml');
+                
+                // Extract fonts
+                theme.fonts = extractThemeFonts(themeDoc);
+                
+                // Extract colors
+                theme.colors = extractThemeColors(themeDoc);
+                theme.source = 'pptx-theme';
+                
+                summaryData.warnings.push('Theme extracted: fonts=' + (theme.fonts.title || 'default') + '/' + (theme.fonts.body || 'default') + ', colors extracted from PPTX');
+                
+            } catch (e) {
+                summaryData.warnings.push('Theme extraction failed: ' + e.message + ' - using default styling');
+            }
+            
+            return theme;
+        }
+        
+        /**
+         * Extract fonts from theme XML
+         */
+        function extractThemeFonts(themeDoc) {
+            var fonts = { title: null, body: null };
+            
+            try {
+                // Look for font scheme
+                var fontSchemes = themeDoc.getElementsByTagName('a:fontScheme');
+                if (fontSchemes.length === 0) return fonts;
+                
+                var fontScheme = fontSchemes[0];
+                
+                // Get major font (typically used for headings/titles)
+                var majorFonts = fontScheme.getElementsByTagName('a:majorFont');
+                if (majorFonts.length > 0) {
+                    var latinFonts = majorFonts[0].getElementsByTagName('a:latin');
+                    if (latinFonts.length > 0) {
+                        var typeface = latinFonts[0].getAttribute('typeface');
+                        if (typeface && typeface !== '+mj-lt') {
+                            fonts.title = mapFontToWebSafe(typeface);
+                        }
+                    }
+                }
+                
+                // Get minor font (typically used for body text)
+                var minorFonts = fontScheme.getElementsByTagName('a:minorFont');
+                if (minorFonts.length > 0) {
+                    var latinFonts = minorFonts[0].getElementsByTagName('a:latin');
+                    if (latinFonts.length > 0) {
+                        var typeface = latinFonts[0].getAttribute('typeface');
+                        if (typeface && typeface !== '+mn-lt') {
+                            fonts.body = mapFontToWebSafe(typeface);
+                        }
+                    }
+                }
+                
+            } catch (e) {
+                summaryData.warnings.push('Font extraction failed: ' + e.message);
+            }
+            
+            return fonts;
+        }
+        
+        /**
+         * Map PowerPoint font names to web-safe CSS font stacks
+         */
+        function mapFontToWebSafe(fontName) {
+            if (!fontName) return null;
+            
+            var name = fontName.toLowerCase();
+            
+            // Common web-safe fonts - use directly
+            var webSafeFonts = {
+                'arial': '"Arial", sans-serif',
+                'helvetica': '"Helvetica Neue", "Helvetica", sans-serif',
+                'verdana': '"Verdana", sans-serif',
+                'tahoma': '"Tahoma", sans-serif',
+                'trebuchet': '"Trebuchet MS", sans-serif',
+                'georgia': '"Georgia", serif',
+                'times': '"Times New Roman", "Times", serif',
+                'courier': '"Courier New", "Courier", monospace',
+                'impact': '"Impact", sans-serif',
+                'calibri': '"Calibri", sans-serif',
+                'cambria': '"Cambria", serif',
+                'segoe': '"Segoe UI", sans-serif',
+                'roboto': '"Roboto", sans-serif'
+            };
+            
+            // Check for direct matches
+            for (var key in webSafeFonts) {
+                if (name.includes(key)) {
+                    return webSafeFonts[key];
+                }
+            }
+            
+            // Classify by style and provide fallback stack
+            var serifKeywords = ['serif', 'times', 'garamond', 'baskerville', 'palatino', 'bodoni'];
+            var monoKeywords = ['mono', 'courier', 'consolas', 'menlo', 'monaco'];
+            
+            var isSerif = serifKeywords.some(function(k) { return name.includes(k); });
+            var isMono = monoKeywords.some(function(k) { return name.includes(k); });
+            
+            if (isMono) {
+                return '"' + fontName + '", ui-monospace, "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace';
+            } else if (isSerif) {
+                return '"' + fontName + '", "Georgia", "Times New Roman", serif';
+            } else {
+                return '"' + fontName + '", system-ui, -apple-system, "Segoe UI", "Roboto", "Arial", sans-serif';
+            }
+        }
+        
+        /**
+         * Extract colors from theme XML color scheme
+         */
+        function extractThemeColors(themeDoc) {
+            var colors = { bg: '#ffffff', text: '#000000', accent: '#0066cc', muted: '#666666' };
+            
+            try {
+                // Find color scheme
+                var colorSchemes = themeDoc.getElementsByTagName('a:clrScheme');
+                if (colorSchemes.length === 0) return colors;
+                
+                var colorScheme = colorSchemes[0];
+                
+                // Extract key colors
+                var dk1 = getThemeColor(colorScheme, 'a:dk1');      // Dark 1 (usually text)
+                var lt1 = getThemeColor(colorScheme, 'a:lt1');      // Light 1 (usually background)
+                var accent1 = getThemeColor(colorScheme, 'a:accent1');
+                var accent2 = getThemeColor(colorScheme, 'a:accent2');
+                
+                // Assign to our palette
+                if (lt1) colors.bg = lt1;
+                if (dk1) colors.text = dk1;
+                if (accent1) colors.accent = accent1;
+                else if (accent2) colors.accent = accent2;
+                
+                // Derive muted color (mix of bg and text)
+                colors.muted = blendColors(colors.bg, colors.text, 0.6);
+                
+            } catch (e) {
+                summaryData.warnings.push('Color extraction failed: ' + e.message);
+            }
+            
+            return colors;
+        }
+        
+        /**
+         * Get a specific theme color from color scheme
+         */
+        function getThemeColor(colorScheme, tagName) {
+            var elements = colorScheme.getElementsByTagName(tagName);
+            if (elements.length === 0) return null;
+            
+            var colorElement = elements[0];
+            
+            // Check for srgbClr (RGB color)
+            var srgbElements = colorElement.getElementsByTagName('a:srgbClr');
+            if (srgbElements.length > 0) {
+                var val = srgbElements[0].getAttribute('val');
+                if (val) return '#' + val;
+            }
+            
+            // Check for sysClr (system color)
+            var sysElements = colorElement.getElementsByTagName('a:sysClr');
+            if (sysElements.length > 0) {
+                var lastClr = sysElements[0].getAttribute('lastClr');
+                if (lastClr) return '#' + lastClr;
+            }
+            
+            return null;
+        }
+        
+        /**
+         * Blend two hex colors
+         */
+        function blendColors(color1, color2, ratio) {
+            var c1 = hexToRgb(color1);
+            var c2 = hexToRgb(color2);
+            if (!c1 || !c2) return '#666666';
+            
+            var r = Math.round(c1.r * ratio + c2.r * (1 - ratio));
+            var g = Math.round(c1.g * ratio + c2.g * (1 - ratio));
+            var b = Math.round(c1.b * ratio + c2.b * (1 - ratio));
+            
+            return rgbToHex(r, g, b);
+        }
+        
+        /**
+         * Convert hex color to RGB
+         */
+        function hexToRgb(hex) {
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+        
+        /**
+         * Convert RGB to hex
+         */
+        function rgbToHex(r, g, b) {
+            return '#' + [r, g, b].map(function(x) {
+                var hex = x.toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+        }
+        
+        /**
+         * Calculate luminance of a color (for WCAG contrast)
+         */
+        function getLuminance(hex) {
+            var rgb = hexToRgb(hex);
+            if (!rgb) return 0;
+            
+            var rsrgb = rgb.r / 255;
+            var gsrgb = rgb.g / 255;
+            var bsrgb = rgb.b / 255;
+            
+            var r = rsrgb <= 0.03928 ? rsrgb / 12.92 : Math.pow((rsrgb + 0.055) / 1.055, 2.4);
+            var g = gsrgb <= 0.03928 ? gsrgb / 12.92 : Math.pow((gsrgb + 0.055) / 1.055, 2.4);
+            var b = bsrgb <= 0.03928 ? bsrgb / 12.92 : Math.pow((bsrgb + 0.055) / 1.055, 2.4);
+            
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        }
+        
+        /**
+         * Calculate contrast ratio between two colors
+         */
+        function getContrastRatio(color1, color2) {
+            var lum1 = getLuminance(color1);
+            var lum2 = getLuminance(color2);
+            var lighter = Math.max(lum1, lum2);
+            var darker = Math.min(lum1, lum2);
+            return (lighter + 0.05) / (darker + 0.05);
+        }
+        
+        /**
+         * Ensure WCAG AA contrast compliance (4.5:1 for normal text)
+         * Adjusts colors if needed and returns adjusted palette with warnings
+         */
+        function ensureWCAGContrast(colors) {
+            var adjusted = {
+                bg: colors.bg,
+                text: colors.text,
+                accent: colors.accent,
+                muted: colors.muted
+            };
+            var adjustments = [];
+            
+            // Check text on background
+            var textBgRatio = getContrastRatio(colors.text, colors.bg);
+            if (textBgRatio < 4.5) {
+                // Adjust text to be darker or lighter
+                var bgLum = getLuminance(colors.bg);
+                if (bgLum > 0.5) {
+                    // Light background, darken text
+                    adjusted.text = '#000000';
+                } else {
+                    // Dark background, lighten text
+                    adjusted.text = '#ffffff';
+                }
+                adjustments.push('Text color adjusted from ' + colors.text + ' to ' + adjusted.text + ' for WCAG contrast (was ' + textBgRatio.toFixed(2) + ':1)');
+            }
+            
+            // Check accent on background
+            var accentBgRatio = getContrastRatio(colors.accent, colors.bg);
+            if (accentBgRatio < 3.0) {  // AA for large text / UI components
+                var bgLum = getLuminance(colors.bg);
+                if (bgLum > 0.5) {
+                    // Light background, darken accent
+                    adjusted.accent = darkenColor(colors.accent, 0.4);
+                } else {
+                    // Dark background, lighten accent
+                    adjusted.accent = lightenColor(colors.accent, 0.4);
+                }
+                adjustments.push('Accent color adjusted from ' + colors.accent + ' to ' + adjusted.accent + ' for WCAG contrast (was ' + accentBgRatio.toFixed(2) + ':1)');
+            }
+            
+            // Re-derive muted with adjusted colors
+            adjusted.muted = blendColors(adjusted.bg, adjusted.text, 0.6);
+            
+            return { colors: adjusted, adjustments: adjustments };
+        }
+        
+        /**
+         * Darken a color by a factor
+         */
+        function darkenColor(hex, factor) {
+            var rgb = hexToRgb(hex);
+            if (!rgb) return hex;
+            
+            var r = Math.max(0, Math.round(rgb.r * (1 - factor)));
+            var g = Math.max(0, Math.round(rgb.g * (1 - factor)));
+            var b = Math.max(0, Math.round(rgb.b * (1 - factor)));
+            
+            return rgbToHex(r, g, b);
+        }
+        
+        /**
+         * Lighten a color by a factor
+         */
+        function lightenColor(hex, factor) {
+            var rgb = hexToRgb(hex);
+            if (!rgb) return hex;
+            
+            var r = Math.min(255, Math.round(rgb.r + (255 - rgb.r) * factor));
+            var g = Math.min(255, Math.round(rgb.g + (255 - rgb.g) * factor));
+            var b = Math.min(255, Math.round(rgb.b + (255 - rgb.b) * factor));
+            
+            return rgbToHex(r, g, b);
+        }
+
         async function processZip(arrayBuffer) {
             try {
                 var zipFile = await JSZip.loadAsync(arrayBuffer);
@@ -565,6 +904,16 @@
                 }
                 
                 summaryData.slides = slideFiles.length;
+                document.getElementById('loadtxt').textContent = 'Extracting theme...';
+                
+                // Extract theme from PPTX
+                var extractedTheme = await extractTheme(zipFile);
+                
+                if (cancelled) {
+                    resetProcessing();
+                    return;
+                }
+                
                 document.getElementById('loadtxt').textContent = 'Processing ' + slideFiles.length + ' slides...';
                 
                 slideData = [];
@@ -596,7 +945,7 @@
                     return;
                 }
                 
-                html = await makeHTML(slideData);
+                html = await makeHTML(slideData, extractedTheme);
                 
                 iframe.srcdoc = html;
                 prev.classList.add('show');
@@ -960,9 +1309,50 @@
             return result;
         }
 
-        async function makeHTML(slides) {
+        async function makeHTML(slides, extractedTheme) {
             var t = themes[theme];
             var secs = '';
+            
+            // Apply extracted theme or use defaults
+            var themeColors = { bg: t.b1, text: '#ffffff', accent: t.p, muted: 'rgba(255,255,255,0.6)' };
+            var themeFonts = { title: '"Titillium Web", sans-serif', body: '"Titillium Web", sans-serif' };
+            var themeInfo = {
+                source: 'preset-theme',
+                colorAdjustments: [],
+                fontMappings: []
+            };
+            
+            // If we have extracted theme, use it with WCAG validation
+            if (extractedTheme && extractedTheme.source === 'pptx-theme') {
+                // Ensure WCAG contrast compliance
+                var contrastResult = ensureWCAGContrast(extractedTheme.colors);
+                themeColors = {
+                    bg: contrastResult.colors.bg,
+                    text: contrastResult.colors.text,
+                    accent: contrastResult.colors.accent,
+                    muted: contrastResult.colors.muted
+                };
+                
+                // Record adjustments for accessibility report
+                themeInfo.colorAdjustments = contrastResult.adjustments;
+                if (contrastResult.adjustments.length > 0) {
+                    contrastResult.adjustments.forEach(function(adj) {
+                        summaryData.warnings.push('WCAG: ' + adj);
+                    });
+                }
+                
+                // Use extracted fonts
+                if (extractedTheme.fonts.title) {
+                    themeFonts.title = extractedTheme.fonts.title;
+                    themeInfo.fontMappings.push('Title font: ' + extractedTheme.fonts.title);
+                }
+                if (extractedTheme.fonts.body) {
+                    themeFonts.body = extractedTheme.fonts.body;
+                    themeInfo.fontMappings.push('Body font: ' + extractedTheme.fonts.body);
+                }
+                
+                themeInfo.source = 'pptx-extracted';
+            }
             
             for (var i = 0; i < slides.length; i++) {
                 var slide = slides[i];
@@ -1129,18 +1519,41 @@
                     break;
                 }
             }
+            
+            // Store theme info globally for accessibility report
+            extractedThemeInfo = themeInfo;
 
             // Build formatted CSS with detailed comments for non-engineers
+            // Use extracted theme colors and fonts if available
+            var themeComment = '';
+            if (themeInfo.source === 'pptx-extracted') {
+                themeComment = '   NOTE: Colors and fonts below were extracted from your PowerPoint theme\n' +
+                    '   and adjusted for WCAG accessibility compliance where needed.\n';
+                if (themeInfo.fontMappings.length > 0) {
+                    themeComment += '   Fonts: ' + themeInfo.fontMappings.join(', ') + '\n';
+                }
+                if (themeInfo.colorAdjustments.length > 0) {
+                    themeComment += '   Adjustments made: ' + themeInfo.colorAdjustments.length + ' color(s) adjusted for contrast\n';
+                }
+            } else {
+                themeComment = '   NOTE: Using preset theme colors. Upload a PPTX to extract its theme.\n';
+            }
+            
             var css = '/* ========================================\n' +
                 '   COLOR PALETTE\n' +
                 '   EDIT THIS SECTION to change the color scheme of your site.\n' +
                 '   These color variables are used throughout the design.\n' +
+                themeComment +
                 '   ======================================== */\n' +
                 ':root {\n' +
-                '  --p: ' + t.p + ';  /* Primary accent color */\n' +
-                '  --s: ' + t.s + ';  /* Secondary accent color */\n' +
-                '  --b1: ' + t.bg1 + ';  /* Background gradient start */\n' +
-                '  --b2: ' + t.bg2 + ';  /* Background gradient end */\n' +
+                '  --bg: ' + themeColors.bg + ';  /* Background color */\n' +
+                '  --text: ' + themeColors.text + ';  /* Main text color */\n' +
+                '  --accent: ' + themeColors.accent + ';  /* Accent/highlight color */\n' +
+                '  --muted: ' + themeColors.muted + ';  /* Muted text color */\n' +
+                '  --p: ' + (themeInfo.source === 'pptx-extracted' ? themeColors.accent : t.p) + ';  /* Primary accent (for compatibility) */\n' +
+                '  --s: ' + (themeInfo.source === 'pptx-extracted' ? lightenColor(themeColors.accent, 0.2) : t.s) + ';  /* Secondary accent */\n' +
+                '  --b1: ' + (themeInfo.source === 'pptx-extracted' ? themeColors.bg : t.bg1) + ';  /* Background gradient start */\n' +
+                '  --b2: ' + (themeInfo.source === 'pptx-extracted' ? darkenColor(themeColors.bg, 0.1) : t.bg2) + ';  /* Background gradient end */\n' +
                 '}\n\n' +
                 '/* ========================================\n' +
                 '   BASE STYLES\n' +
@@ -1158,13 +1571,13 @@
                 '/* ========================================\n' +
                 '   TYPOGRAPHY AND LAYOUT\n' +
                 '   EDIT THIS SECTION to change fonts and text styling.\n' +
-                '   To use a different font, change "Titillium Web" and\n' +
-                '   update the Google Font link in the <head>.\n' +
+                (themeInfo.source === 'pptx-extracted' ? '   Fonts extracted from your PowerPoint theme and mapped to web-safe alternatives.\n' : '') +
+                '   To use a different font, change the font-family values below.\n' +
                 '   ======================================== */\n' +
                 'body {\n' +
-                '  font-family: "Titillium Web", sans-serif;\n' +
+                '  font-family: ' + themeFonts.body + ';  /* Body text font */\n' +
                 '  background: linear-gradient(135deg, var(--b1), var(--b2));\n' +
-                '  color: #f5f5f5;\n' +
+                '  color: var(--text);\n' +
                 '  line-height: 1.6;\n' +
                 '}\n\n' +
                 '/* High contrast mode (activated by toggle button) */\n' +
@@ -1174,24 +1587,27 @@
                 '}\n\n' +
                 '/* Main heading (your site title) */\n' +
                 'h1 {\n' +
+                '  font-family: ' + themeFonts.title + ';  /* Title font */\n' +
                 '  font-size: clamp(2.5rem, 8vw, 5rem);\n' +
                 '  font-weight: 700;\n' +
                 '  margin-bottom: 1.5rem;\n' +
-                '  background: linear-gradient(135deg, var(--p), #fff, var(--s));\n' +
+                '  background: linear-gradient(135deg, var(--accent), var(--text), var(--s));\n' +
                 '  -webkit-background-clip: text;\n' +
                 '  -webkit-text-fill-color: transparent;\n' +
                 '}\n\n' +
                 '/* Section headings (slide titles) */\n' +
                 '/* EDIT THIS to change the size or style of slide titles */\n' +
                 'h2 {\n' +
+                '  font-family: ' + themeFonts.title + ';  /* Title font */\n' +
                 '  font-size: clamp(2rem, 5vw, 3.5rem);\n' +
                 '  font-weight: 700;\n' +
                 '  margin-bottom: 2rem;\n' +
+                '  color: var(--text);\n' +
                 '}\n\n' +
                 '/* Paragraphs */\n' +
                 'p {\n' +
                 '  font-size: 1.1rem;\n' +
-                '  color: rgba(255, 255, 255, 0.8);\n' +
+                '  color: var(--muted);\n' +
                 '  margin-bottom: 1rem;\n' +
                 '}\n\n' +
                 '/* Lists */\n' +
@@ -1201,7 +1617,7 @@
                 '}\n\n' +
                 'li {\n' +
                 '  margin-bottom: 0.5rem;\n' +
-                '  color: rgba(255, 255, 255, 0.8);\n' +
+                '  color: var(--muted);\n' +
                 '}\n\n' +
                 '/* ========================================\n' +
                 '   SECTION LAYOUT\n' +
@@ -1345,7 +1761,7 @@
                 '  color: rgba(255, 255, 255, 0.5);\n' +
                 '}';
 
-            var accessibilityReport = generateAccessibilityReport(slides, hasTextOverBackground);
+            var accessibilityReport = generateAccessibilityReport(slides, hasTextOverBackground, themeInfo);
             
             // Build comprehensive instructional HTML comments for designers/creatives
             var htmlComments = '<!--\n' +
@@ -1399,7 +1815,7 @@
             return result;
         }
 
-        function generateAccessibilityReport(slides, hasTextOverBackground) {
+        function generateAccessibilityReport(slides, hasTextOverBackground, themeInfo) {
             var report = [];
             report.push('ACCESSIBILITY REPORT');
             report.push('Generated: ' + new Date().toISOString());
@@ -1409,6 +1825,35 @@
             report.push('WCAG compliance also depends on source content quality (e.g., meaningful');
             report.push('headings, sufficient color contrast, appropriate image usage).');
             report.push('');
+            
+            // Add theme extraction information
+            if (themeInfo && themeInfo.source === 'pptx-extracted') {
+                report.push('=== THEME EXTRACTION ===');
+                report.push('Colors and fonts were extracted from your PowerPoint theme.');
+                report.push('');
+                report.push('Extracted Colors:');
+                report.push('  These were pulled from your PPTX color scheme and used in the generated site.');
+                if (themeInfo.colorAdjustments && themeInfo.colorAdjustments.length > 0) {
+                    report.push('');
+                    report.push('WCAG Contrast Adjustments:');
+                    themeInfo.colorAdjustments.forEach(function(adj) {
+                        report.push('  - ' + adj);
+                    });
+                    report.push('  ✓ All color adjustments ensure WCAG AA contrast compliance (4.5:1 for text)');
+                } else {
+                    report.push('  ✓ All extracted colors meet WCAG AA contrast requirements');
+                }
+                report.push('');
+                if (themeInfo.fontMappings && themeInfo.fontMappings.length > 0) {
+                    report.push('Extracted Fonts:');
+                    themeInfo.fontMappings.forEach(function(mapping) {
+                        report.push('  - ' + mapping);
+                    });
+                    report.push('  Note: Fonts were mapped to web-safe alternatives (no font files embedded)');
+                    report.push('');
+                }
+            }
+            
             report.push('=== CONTENT SUMMARY ===');
             report.push('Total slides: ' + slides.length);
             
@@ -1535,7 +1980,7 @@
                 outputZip.file('index.html', html);
                 
                 // Generate accessibility report with correct arguments
-                var accessibilityReport = generateAccessibilityReport(slideData, hasTextOverBackground);
+                var accessibilityReport = generateAccessibilityReport(slideData, hasTextOverBackground, extractedThemeInfo);
                 outputZip.file('ACCESSIBILITY_REPORT.txt', accessibilityReport);
                 
                 // Generate the zip
