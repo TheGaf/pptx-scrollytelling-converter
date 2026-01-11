@@ -236,6 +236,11 @@
 
         // WCAG 2.1 contrast ratio calculation
         function getLuminance(hexColor) {
+            // Validate input
+            if (!hexColor || typeof hexColor !== 'string' || !hexColor.match(/^#[0-9A-Fa-f]{6}$/)) {
+                return 0; // Return 0 for invalid input
+            }
+            
             var rgb = parseInt(hexColor.substring(1), 16);
             var r = ((rgb >> 16) & 0xff) / 255;
             var g = ((rgb >> 8) & 0xff) / 255;
@@ -419,11 +424,13 @@
             for (var i = 0; i < data.slides.length; i++) {
                 var slide = data.slides[i];
                 var bgColor = i % 2 === 0 ? data.colors.background : '#f8f9fa';
-                var accentColor = data.colorPalette[colorIndex % data.colorPalette.length] || data.colors.secondary;
+                var accentColor = data.colorPalette.length > 0 
+                    ? data.colorPalette[colorIndex % data.colorPalette.length] 
+                    : data.colors.secondary;
                 colorIndex++;
                 
-                var heading = slide.text.split('\n')[0] || 'Section ' + (i + 1);
-                var body = slide.text.substring(heading.length).trim();
+                var heading = slide.text ? (slide.text.split('\n')[0] || 'Section ' + (i + 1)) : 'Section ' + (i + 1);
+                var body = slide.text ? slide.text.substring(heading.length).trim() : '';
                 var lines = body.split('\n').filter(function(l) { return l.trim(); });
                 
                 auditLog.push('Slide ' + (i + 1) + ': ' + slide.layout + ' layout (' + slide.textLength + ' chars, ' + slide.imageCount + ' images)');
@@ -451,7 +458,7 @@
                     sections += '</div>';
                     sections += '<div class="split-right">';
                     if (slide.hasImage) {
-                        sections += '<div class="image-placeholder" style="background:linear-gradient(135deg,' + accentColor + ',#ddd)" loading="lazy">';
+                        sections += '<div class="image-placeholder" style="background:linear-gradient(135deg,' + accentColor + ',#ddd)">';
                         sections += '<span style="color:#fff;opacity:0.7">Image</span>';
                         sections += '</div>';
                     } else {
@@ -485,7 +492,7 @@
                     sections += '<h2 class="gallery-title" style="color:' + primaryOnWhite.color + '">' + escapeHtml(heading) + '</h2>';
                     sections += '<div class="gallery-grid">';
                     for (var k = 0; k < Math.min(slide.imageCount, 6); k++) {
-                        sections += '<figure class="gallery-item" loading="lazy">';
+                        sections += '<figure class="gallery-item">';
                         sections += '<div class="gallery-image" style="background:linear-gradient(135deg,' + accentColor + ',#e0e0e0)">';
                         sections += '<span style="color:#fff;opacity:0.6">Image ' + (k + 1) + '</span>';
                         sections += '</div>';
@@ -670,11 +677,14 @@
             
             // Progress bar scroll tracking
             scripts += 'var progressBar=document.getElementById("progressBar");';
+            scripts += 'progressBar.setAttribute("aria-valuemin","0");';
+            scripts += 'progressBar.setAttribute("aria-valuemax","100");';
             scripts += 'window.addEventListener("scroll",function(){';
             scripts += 'var scrollTop=window.scrollY;';
             scripts += 'var docHeight=document.documentElement.scrollHeight-window.innerHeight;';
-            scripts += 'progressBar.style.width=(scrollTop/docHeight*100)+"%";';
-            scripts += 'progressBar.setAttribute("aria-valuenow",Math.round(scrollTop/docHeight*100))';
+            scripts += 'var progress=Math.round(scrollTop/docHeight*100);';
+            scripts += 'progressBar.style.width=progress+"%";';
+            scripts += 'progressBar.setAttribute("aria-valuenow",progress)';
             scripts += '});';
             
             // Progressive disclosure with Intersection Observer
@@ -690,10 +700,10 @@
             scripts += 'document.querySelectorAll("[data-reveal]").forEach(function(el){el.classList.add("revealed")})';
             scripts += '}';
             
-            // Lazy loading images (native + polyfill)
+            // Lazy loading images (native + polyfill for future use)
             scripts += 'if("loading" in HTMLImageElement.prototype){';
             scripts += 'document.querySelectorAll("img[loading=lazy]").forEach(function(img){';
-            scripts += 'img.src=img.dataset.src||img.src';
+            scripts += 'if(img.dataset.src){img.src=img.dataset.src}';
             scripts += '})';
             scripts += '}';
             
