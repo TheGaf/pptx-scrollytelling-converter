@@ -201,8 +201,16 @@
 
         function sanitizeFont(font) {
             if (!font) return 'Arial';
-            // Remove any potentially dangerous characters
-            return font.replace(/[<>'"\\]/g, '').trim() || 'Arial';
+            // Remove any potentially dangerous characters including CSS special chars
+            var sanitized = font.replace(/[<>'"\\;{}/*]/g, '').trim();
+            if (!sanitized) return 'Arial';
+            // Additional validation: ensure it looks like a valid font name
+            // Allow only alphanumeric, spaces, hyphens, and common punctuation
+            if (!/^[a-zA-Z0-9\s\-,]+$/.test(sanitized)) {
+                console.warn('Invalid font name detected:', font);
+                return 'Arial';
+            }
+            return sanitized;
         }
 
         function escapeHtml(text) {
