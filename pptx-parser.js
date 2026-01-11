@@ -381,7 +381,8 @@ var PPTXParser = (function() {
                         for (var i = 0; i < slideFiles.length; i++) {
                             (function(index, slidePath) {
                                 var slideFile = slideFolder.file(slidePath);
-                                var slideNumber = parseInt(slidePath.match(/\d+/)[0]);
+                                var slideNumberMatch = slidePath.match(/\d+/);
+                                var slideNumber = slideNumberMatch ? parseInt(slideNumberMatch[0]) : index + 1;
                                 
                                 // Get slide XML
                                 var slideXmlPromise = slideFile.async('text');
