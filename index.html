@@ -312,6 +312,15 @@
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(xml, 'text/xml');
                 
+                // Helper to get color attribute and validate
+                function getColorValue(element) {
+                    var val = element.getAttribute('val') || element.getAttribute('lastClr');
+                    if (!val) return null;
+                    // Validate that it's a valid hex color (6 hex chars)
+                    if (!/^[0-9A-Fa-f]{6}$/.test(val)) return null;
+                    return '#' + val;
+                }
+                
                 // Extract color scheme
                 var clrScheme = doc.querySelector('clrScheme');
                 if (clrScheme) {
@@ -322,20 +331,20 @@
                     var accent2 = clrScheme.querySelector('accent2 srgbClr, accent2 sysClr');
                     
                     if (dk1) {
-                        var val = dk1.getAttribute('val') || dk1.getAttribute('lastClr');
-                        if (val) extractedStyles.colors.bg1 = '#' + val;
+                        var color = getColorValue(dk1);
+                        if (color) extractedStyles.colors.bg1 = color;
                     }
                     if (dk2) {
-                        var val = dk2.getAttribute('val') || dk2.getAttribute('lastClr');
-                        if (val) extractedStyles.colors.bg2 = '#' + val;
+                        var color = getColorValue(dk2);
+                        if (color) extractedStyles.colors.bg2 = color;
                     }
                     if (accent1) {
-                        var val = accent1.getAttribute('val') || accent1.getAttribute('lastClr');
-                        if (val) extractedStyles.colors.p = '#' + val;
+                        var color = getColorValue(accent1);
+                        if (color) extractedStyles.colors.p = color;
                     }
                     if (accent2) {
-                        var val = accent2.getAttribute('val') || accent2.getAttribute('lastClr');
-                        if (val) extractedStyles.colors.s = '#' + val;
+                        var color = getColorValue(accent2);
+                        if (color) extractedStyles.colors.s = color;
                     }
                 }
                 
@@ -347,11 +356,11 @@
                     
                     if (majorFont) {
                         var typeface = majorFont.getAttribute('typeface');
-                        if (typeface) extractedStyles.fonts.heading = typeface;
+                        if (typeface) extractedStyles.fonts.heading = sanitizeFont(typeface);
                     }
                     if (minorFont) {
                         var typeface = minorFont.getAttribute('typeface');
-                        if (typeface) extractedStyles.fonts.body = typeface;
+                        if (typeface) extractedStyles.fonts.body = sanitizeFont(typeface);
                     }
                 }
             } catch (err) {
@@ -416,6 +425,7 @@
                         slideFile.async('string').then(function(xml) {
                             var parser = new DOMParser();
                             var doc = parser.parseFromString(xml, 'text/xml');
+                            // Use a\\:t to properly escape the colon in the namespace selector
                             var texts = doc.querySelectorAll('a\\:t, t');
                             var txt = '';
                             texts.forEach(function(t) { 
@@ -469,6 +479,7 @@
             var sanitizedCopy = escapeHtml(copyinp.value);
             
             for (var i = 0; i < slides.length; i++) {
+                // Note: slides[i].text is already HTML-escaped during extraction (see line ~431)
                 secs += '<section><div class="ov"></div><div class="con"><h2>Section ' + (i+1) + '</h2><p>' + slides[i].text + '</p></div></section>';
             }
 
