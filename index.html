@@ -330,7 +330,9 @@
                         if (path.includes('.emf') || path.includes('.wmf')) {
                             addLog('Skipped EMF/WMF: ' + path, 'warn');
                         } else if (path.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                            data.images.push({ path: path, data: file });
+                            file.async('arraybuffer').then(function(data) {
+                                data.images.push({ path: path, data: data });
+                            });
                             imageCount++;
                         }
                     });
@@ -392,7 +394,7 @@
             for (var i = 0; i < data.images.length; i++) {
                 var img = data.images[i];
                 var filename = img.path.split('/').pop();
-                assetsFolder.file(filename, img.data._data);
+                assetsFolder.file(filename, img.data, { binary: true });
             }
 
             var report = 'BESPOKE DESIGN REPORT\n';
