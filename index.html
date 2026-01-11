@@ -257,7 +257,7 @@
         function extractPPTXData(pptxZip) {
             var data = {
                 fonts: { primary: 'Roboto', secondary: 'Roboto' },
-                colors: { primary: '#0066cc', secondary: '#00cc99', background: '#ffffff', foreground: '#1a1a1a', muted: '#999999', border: '#dddddd' },
+                colors: { primary: '#0076BA', secondary: '#05A89D', background: '#ffffff', foreground: '#1a1a1a', muted: '#999999', border: '#dddddd' },
                 slides: [],
                 images: [],
                 warnings: []
@@ -267,36 +267,19 @@
                 var themeFile = pptxZip.file('ppt/theme/theme1.xml');
                 if (themeFile) {
                     var themeXml = themeFile.asText();
-                    var parser = new DOMParser();
-                    var doc = parser.parseFromString(themeXml, 'text/xml');
-
-                    var fontScheme = doc.getElementsByTagName('fontScheme')[0];
-                    if (fontScheme) {
-                        var majorFonts = fontScheme.getElementsByTagName('majorFont');
-                        var minorFonts = fontScheme.getElementsByTagName('minorFont');
-                        if (majorFonts.length > 0) {
-                            var majorLatin = majorFonts[0].getElementsByTagName('latin')[0];
-                            if (majorLatin) data.fonts.primary = mapFont(majorLatin.getAttribute('typeface'));
-                        }
-                        if (minorFonts.length > 0) {
-                            var minorLatin = minorFonts[0].getElementsByTagName('latin')[0];
-                            if (minorLatin) data.fonts.secondary = mapFont(minorLatin.getAttribute('typeface'));
-                        }
-                    }
-
-                    var colorScheme = doc.getElementsByTagName('clrScheme')[0];
-                    if (colorScheme) {
-                        var accent1 = colorScheme.getElementsByTagName('accent1')[0];
-                        var accent2 = colorScheme.getElementsByTagName('accent2')[0];
-                        if (accent1) {
-                            var srgb1 = accent1.getElementsByTagName('srgbClr')[0];
-                            if (srgb1) data.colors.primary = '#' + srgb1.getAttribute('val');
-                        }
-                        if (accent2) {
-                            var srgb2 = accent2.getElementsByTagName('srgbClr')[0];
-                            if (srgb2) data.colors.secondary = '#' + srgb2.getAttribute('val');
-                        }
-                    }
+                    
+                    // Extract fonts using regex
+                    var majorFontMatch = themeXml.match(/<a:majorFont><a:latin typeface="([^"]+)"/);
+                    var minorFontMatch = themeXml.match(/<a:minorFont><a:latin typeface="([^"]+)"/);
+                    if (majorFontMatch) data.fonts.primary = mapFont(majorFontMatch[1]);
+                    if (minorFontMatch) data.fonts.secondary = mapFont(minorFontMatch[1]);
+                    
+                    // Extract colors using regex
+                    var accent1Match = themeXml.match(/<a:accent1><a:srgbClr val="([0-9A-Fa-f]{6})"/);
+                    var accent2Match = themeXml.match(/<a:accent2><a:srgbClr val="([0-9A-Fa-f]{6})"/);
+                    if (accent1Match) data.colors.primary = '#' + accent1Match[1];
+                    if (accent2Match) data.colors.secondary = '#' + accent2Match[1];
+                    
                     addLog('Theme extracted: ' + data.fonts.primary + ', ' + data.colors.primary, 'info');
                 } else {
                     addLog('No theme file found, using defaults', 'warn');
