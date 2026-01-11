@@ -975,12 +975,38 @@
                     var bgImage = slide.images.find(function(img) { return img.isBackground; }) || slide.images[0];
                     bgStyle = 'background-image: url(' + bgImage.data + '); background-size: cover; background-position: center;';
                     
-                    // Generate comment explaining background selection
+                    // Generate instructional comment explaining background selection
                     var bgReason = bgImage.selectionReason || 'unknown';
                     if (bgReason === 'aspect-ratio-and-area') {
-                        bgComment = '<!-- BACKGROUND IMAGE: This image was automatically chosen as the background because it has an aspect ratio similar to a standard slide (16:9) and is one of the larger images. If this doesn\'t look right, you can swap it with another image or remove it entirely. -->\n        ';
+                        bgComment = '<!-- ========== BACKGROUND IMAGE ==========\n' +
+                            '             HOW IT WAS CHOSEN:\n' +
+                            '             This image was automatically selected as the background because:\n' +
+                            '             • It has an aspect ratio similar to a standard slide (16:9)\n' +
+                            '             • It is one of the larger images on this slide\n' +
+                            '             \n' +
+                            '             YOU CAN:\n' +
+                            '             • Keep it as-is if it looks good\n' +
+                            '             • Swap it with another image from your slide\n' +
+                            '             • Remove it entirely by deleting the style="background-image..." part\n' +
+                            '             \n' +
+                            '             ACCESSIBILITY NOTE:\n' +
+                            '             Background images are decorative (CSS only).\n' +
+                            '             Important content images should be inline <img> tags with alt text.\n' +
+                            '             ===================================== -->\n        ';
                     } else if (bgReason === 'first-image-fallback') {
-                        bgComment = '<!-- BACKGROUND IMAGE: This image was chosen as the background by default (it appeared first in the slide). You may want to review this choice and swap it with a different image if needed. -->\n        ';
+                        bgComment = '<!-- ========== BACKGROUND IMAGE ==========\n' +
+                            '             HOW IT WAS CHOSEN:\n' +
+                            '             This image was chosen as the background by default\n' +
+                            '             (it appeared first in the slide and size info was unavailable).\n' +
+                            '             \n' +
+                            '             PLEASE REVIEW:\n' +
+                            '             • Check if this image makes sense as a background\n' +
+                            '             • You may want to swap it with a different image\n' +
+                            '             • Consider if any image should be background at all\n' +
+                            '             \n' +
+                            '             TO REMOVE:\n' +
+                            '             Delete the style="background-image..." attribute from <section>\n' +
+                            '             ===================================== -->\n        ';
                     } else {
                         bgComment = '<!-- BACKGROUND IMAGE: This image is displayed as the background for this section. You can safely change or remove it if desired. -->\n        ';
                     }
@@ -997,7 +1023,17 @@
                         } else {
                             altText = 'Image ' + (idx + 1) + ' from slide ' + (i + 1);
                         }
-                        inlineImages += '<!-- INLINE IMAGE: This image appears within the content. The alt text describes what the image shows for accessibility. You can edit the alt text or image if needed. -->\n          <img src="' + img.data + '" alt="' + altText + '" loading="lazy" style="max-width: 100%; height: auto; margin: 1rem 0; border-radius: 0.5rem;">\n          ';
+                        inlineImages += '<!-- ===== INLINE IMAGE =====\n' +
+                            '                   PURPOSE: This image appears within the content (not as background)\n' +
+                            '                   ALT TEXT: "' + altText + '"\n' +
+                            '                   \n' +
+                            '                   ACTION REQUIRED:\n' +
+                            '                   • Review the alt text to ensure it accurately describes this image\n' +
+                            '                   • If the image contains important text, include that text in alt\n' +
+                            '                   • If the image is decorative, you can use alt=""\n' +
+                            '                   \n' +
+                            '                   EDIT: You can change the alt="..." text or remove this image entirely.\n' +
+                            '                   ====================== -->\n          <img src="' + img.data + '" alt="' + altText + '" loading="lazy" style="max-width: 100%; height: auto; margin: 1rem 0; border-radius: 0.5rem;">\n          ';
                     });
                 }
                 
@@ -1007,9 +1043,19 @@
                 // Generate heading comment explaining how it was chosen
                 if (slide.text.heading) {
                     if (slide.text.headingSource === 'title-placeholder') {
-                        headingComment = '<!-- HEADING: This heading was automatically extracted from the slide\'s title placeholder. You can safely edit this text to better describe this section. -->\n          ';
+                        headingComment = '<!-- ===== HEADING =====\n' +
+                            '                   EXTRACTED FROM: PowerPoint title placeholder\n' +
+                            '                   CONFIDENCE: High (this was marked as the slide title)\n' +
+                            '                   ACTION: Verify the heading accurately describes this section.\n' +
+                            '                   EDIT: You can safely change this text.\n' +
+                            '                   ================== -->\n          ';
                     } else if (slide.text.headingSource === 'first-non-bullet') {
-                        headingComment = '<!-- HEADING: This heading was inferred from the first non-bullet text found on the slide. Please verify this is the correct heading for this section and edit if needed. -->\n          ';
+                        headingComment = '<!-- ===== HEADING =====\n' +
+                            '                   INFERRED FROM: First non-bullet text on slide\n' +
+                            '                   CONFIDENCE: Medium (best guess, no title placeholder found)\n' +
+                            '                   ACTION: PLEASE VERIFY this is the correct heading!\n' +
+                            '                   EDIT: You can safely change this text or move it to content if not a heading.\n' +
+                            '                   ================== -->\n          ';
                     } else {
                         headingComment = '<!-- HEADING: This is the main heading for this section. You can safely edit this text. -->\n          ';
                     }
@@ -1050,8 +1096,29 @@
                 }
                 
                 // Build section with aria-labelledby if heading exists
-                var sectionComment = '<!-- SECTION ' + (i + 1) + ': This is one slide from your presentation. You can safely edit the text content inside this section. The background image and styling are controlled by the inline styles. -->\n      ';
-                secs += sectionComment + bgComment + '<section' + ariaLabel + ' style="' + bgStyle + '">\n        <div class="ov"></div>\n        <div class="con">\n          ' + headingComment + heading + '\n          <!-- CONTENT: The paragraphs and lists below were extracted from your slide. You can edit, add, or remove any of this content. -->\n          ' + content + inlineImages + '\n        </div>\n      </section>\n      ';
+                var sectionHeader = '<!-- ========================================\n' +
+                    '         SLIDE ' + (i + 1) + (slide.text.heading ? ': ' + escapeHtml(slide.text.heading) : '') + '\n' +
+                    '         \n' +
+                    '         WHAT CAME FROM POWERPOINT:\n' +
+                    '         • Text content (heading, paragraphs, bullets)\n' +
+                    '         • Images embedded in this slide\n' +
+                    '         \n' +
+                    '         WHAT WAS AUTOMATICALLY DECIDED:\n' +
+                    '         • Background image selection (based on size/aspect ratio)\n' +
+                    '         • Heading detection (from title placeholder or first text)\n' +
+                    '         • Layout and spacing\n' +
+                    '         \n' +
+                    '         YOU CAN SAFELY EDIT:\n' +
+                    '         • All text between tags (headings, paragraphs, list items)\n' +
+                    '         • Alt text for images\n' +
+                    '         • You can swap or remove the background image\n' +
+                    '         \n' +
+                    '         DO NOT EDIT (unless you know CSS/HTML):\n' +
+                    '         • The style attribute (controls background image)\n' +
+                    '         • The aria-labelledby attribute (accessibility feature)\n' +
+                    '         • The <div> structure (needed for overlay effect)\n' +
+                    '         ======================================== -->\n      ';
+                secs += sectionHeader + bgComment + '<section' + ariaLabel + ' style="' + bgStyle + '">\n        <div class="ov"></div>\n        <div class="con">\n          ' + headingComment + heading + '\n          <!-- CONTENT: The paragraphs and lists below were extracted from your slide. You can edit, add, or remove any of this content. -->\n          ' + content + inlineImages + '\n        </div>\n      </section>\n      ';
             }
 
             // Check if any slides have text over background images
@@ -1063,48 +1130,271 @@
                 }
             }
 
-            var reducedMotionCSS = '@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }';
-            
-            var skipLinkCSS = '.skip-link{position:absolute;top:-40px;left:0;background:#fff;color:#000;padding:8px 16px;text-decoration:none;z-index:10000;font-weight:600;border:2px solid #000}.skip-link:focus{top:0;outline:2px solid #00d9ff;outline-offset:2px}';
-            
-            var focusStylesCSS = 'button:focus,a:focus,.contrast-toggle:focus{outline:2px solid #00d9ff;outline-offset:2px}';
-            
-            var css = '*{margin:0;padding:0;box-sizing:border-box}' + skipLinkCSS + focusStylesCSS + ':root{--p:' + t.p + ';--s:' + t.s + ';--b1:' + t.bg1 + ';--b2:' + t.bg2 + '}html{scroll-behavior:smooth}body{font-family:Titillium Web,sans-serif;background:linear-gradient(135deg,var(--b1),var(--b2));color:#f5f5f5;line-height:1.6}body[data-contrast="high"]{background:#000;color:#fff;}.pb{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--p),var(--s));z-index:1000;width:0;transition:width 0.3s}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 0}@media(min-width:1024px){section{min-height:100vh;padding:0}}.con{max-width:1200px;margin:0 auto;padding:2rem;width:100%;position:relative;z-index:10}h1{font-size:clamp(2.5rem,8vw,5rem);font-weight:700;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--p),#fff,var(--s));-webkit-background-clip:text;-webkit-text-fill-color:transparent}h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;margin-bottom:2rem}p{font-size:1.1rem;color:rgba(255,255,255,0.8);margin-bottom:1rem}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.5rem;color:rgba(255,255,255,0.8)}.ov{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,rgba(26,10,46,0.8),rgba(26,10,46,0.6));z-index:2}#hero{background:linear-gradient(135deg,var(--b1),var(--b2))}.hc{text-align:center;animation:fadeIn 1s}@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}footer{padding:2rem;border-top:1px solid rgba(255,255,255,0.1);text-align:center;color:rgba(255,255,255,0.5)}.contrast-toggle{position:fixed;top:1rem;right:1rem;padding:0.5rem 1rem;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.2);color:#f5f5f5;cursor:pointer;border-radius:0.5rem;z-index:1001;font-family:inherit;font-weight:600}body[data-contrast="high"] .contrast-toggle{background:#fff;color:#000;border-color:#fff}' + reducedMotionCSS;
+            // Build formatted CSS with detailed comments for non-engineers
+            var css = '/* ========================================\n' +
+                '   COLOR PALETTE\n' +
+                '   EDIT THIS SECTION to change the color scheme of your site.\n' +
+                '   These color variables are used throughout the design.\n' +
+                '   ======================================== */\n' +
+                ':root {\n' +
+                '  --p: ' + t.p + ';  /* Primary accent color */\n' +
+                '  --s: ' + t.s + ';  /* Secondary accent color */\n' +
+                '  --b1: ' + t.bg1 + ';  /* Background gradient start */\n' +
+                '  --b2: ' + t.bg2 + ';  /* Background gradient end */\n' +
+                '}\n\n' +
+                '/* ========================================\n' +
+                '   BASE STYLES\n' +
+                '   These provide consistent spacing and box sizing.\n' +
+                '   Generally safe to leave as-is.\n' +
+                '   ======================================== */\n' +
+                '* {\n' +
+                '  margin: 0;\n' +
+                '  padding: 0;\n' +
+                '  box-sizing: border-box;\n' +
+                '}\n\n' +
+                'html {\n' +
+                '  scroll-behavior: smooth;\n' +
+                '}\n\n' +
+                '/* ========================================\n' +
+                '   TYPOGRAPHY AND LAYOUT\n' +
+                '   EDIT THIS SECTION to change fonts and text styling.\n' +
+                '   To use a different font, change "Titillium Web" and\n' +
+                '   update the Google Font link in the <head>.\n' +
+                '   ======================================== */\n' +
+                'body {\n' +
+                '  font-family: "Titillium Web", sans-serif;\n' +
+                '  background: linear-gradient(135deg, var(--b1), var(--b2));\n' +
+                '  color: #f5f5f5;\n' +
+                '  line-height: 1.6;\n' +
+                '}\n\n' +
+                '/* High contrast mode (activated by toggle button) */\n' +
+                'body[data-contrast="high"] {\n' +
+                '  background: #000;\n' +
+                '  color: #fff;\n' +
+                '}\n\n' +
+                '/* Main heading (your site title) */\n' +
+                'h1 {\n' +
+                '  font-size: clamp(2.5rem, 8vw, 5rem);\n' +
+                '  font-weight: 700;\n' +
+                '  margin-bottom: 1.5rem;\n' +
+                '  background: linear-gradient(135deg, var(--p), #fff, var(--s));\n' +
+                '  -webkit-background-clip: text;\n' +
+                '  -webkit-text-fill-color: transparent;\n' +
+                '}\n\n' +
+                '/* Section headings (slide titles) */\n' +
+                '/* EDIT THIS to change the size or style of slide titles */\n' +
+                'h2 {\n' +
+                '  font-size: clamp(2rem, 5vw, 3.5rem);\n' +
+                '  font-weight: 700;\n' +
+                '  margin-bottom: 2rem;\n' +
+                '}\n\n' +
+                '/* Paragraphs */\n' +
+                'p {\n' +
+                '  font-size: 1.1rem;\n' +
+                '  color: rgba(255, 255, 255, 0.8);\n' +
+                '  margin-bottom: 1rem;\n' +
+                '}\n\n' +
+                '/* Lists */\n' +
+                'ul {\n' +
+                '  margin-left: 2rem;\n' +
+                '  margin-bottom: 1rem;\n' +
+                '}\n\n' +
+                'li {\n' +
+                '  margin-bottom: 0.5rem;\n' +
+                '  color: rgba(255, 255, 255, 0.8);\n' +
+                '}\n\n' +
+                '/* ========================================\n' +
+                '   SECTION LAYOUT\n' +
+                '   EDIT THIS SECTION to change spacing between slides.\n' +
+                '   Each <section> represents one slide from your PowerPoint.\n' +
+                '   ======================================== */\n' +
+                'section {\n' +
+                '  min-height: auto;\n' +
+                '  display: flex;\n' +
+                '  align-items: center;\n' +
+                '  position: relative;\n' +
+                '  overflow: hidden;\n' +
+                '  padding: 72px 0;  /* EDIT: Spacing above/below each section */\n' +
+                '}\n\n' +
+                '/* On larger screens, make sections fill viewport */\n' +
+                '@media (min-width: 1024px) {\n' +
+                '  section {\n' +
+                '    min-height: 100vh;\n' +
+                '    padding: 0;\n' +
+                '  }\n' +
+                '}\n\n' +
+                '/* Content container (keeps text readable width) */\n' +
+                '.con {\n' +
+                '  max-width: 1200px;  /* EDIT: Maximum width of content */\n' +
+                '  margin: 0 auto;\n' +
+                '  padding: 2rem;  /* EDIT: Inner spacing around content */\n' +
+                '  width: 100%;\n' +
+                '  position: relative;\n' +
+                '  z-index: 10;\n' +
+                '}\n\n' +
+                '/* Overlay (darkens background images for text readability) */\n' +
+                '.ov {\n' +
+                '  position: absolute;\n' +
+                '  top: 0;\n' +
+                '  left: 0;\n' +
+                '  width: 100%;\n' +
+                '  height: 100%;\n' +
+                '  background: linear-gradient(135deg, rgba(26, 10, 46, 0.8), rgba(26, 10, 46, 0.6));\n' +
+                '  z-index: 2;\n' +
+                '}\n\n' +
+                '/* ========================================\n' +
+                '   HERO SECTION (opening slide)\n' +
+                '   ======================================== */\n' +
+                '#hero {\n' +
+                '  background: linear-gradient(135deg, var(--b1), var(--b2));\n' +
+                '}\n\n' +
+                '.hc {\n' +
+                '  text-align: center;\n' +
+                '  animation: fadeIn 1s;\n' +
+                '}\n\n' +
+                '/* ========================================\n' +
+                '   ANIMATIONS\n' +
+                '   EDIT THIS SECTION to change or disable animations.\n' +
+                '   ======================================== */\n' +
+                '@keyframes fadeIn {\n' +
+                '  from {\n' +
+                '    opacity: 0;\n' +
+                '    transform: translateY(30px);\n' +
+                '  }\n' +
+                '  to {\n' +
+                '    opacity: 1;\n' +
+                '    transform: translateY(0);\n' +
+                '  }\n' +
+                '}\n\n' +
+                '/* Respect user preference for reduced motion */\n' +
+                '@media (prefers-reduced-motion: reduce) {\n' +
+                '  *, *::before, *::after {\n' +
+                '    animation-duration: 0.01ms !important;\n' +
+                '    animation-iteration-count: 1 !important;\n' +
+                '    transition-duration: 0.01ms !important;\n' +
+                '  }\n' +
+                '}\n\n' +
+                '/* ========================================\n' +
+                '   INTERACTIVE ELEMENTS\n' +
+                '   Generally leave these as-is for accessibility.\n' +
+                '   ======================================== */\n' +
+                '/* Skip link (helps keyboard users) */\n' +
+                '.skip-link {\n' +
+                '  position: absolute;\n' +
+                '  top: -40px;\n' +
+                '  left: 0;\n' +
+                '  background: #fff;\n' +
+                '  color: #000;\n' +
+                '  padding: 8px 16px;\n' +
+                '  text-decoration: none;\n' +
+                '  z-index: 10000;\n' +
+                '  font-weight: 600;\n' +
+                '  border: 2px solid #000;\n' +
+                '}\n\n' +
+                '.skip-link:focus {\n' +
+                '  top: 0;\n' +
+                '  outline: 2px solid #00d9ff;\n' +
+                '  outline-offset: 2px;\n' +
+                '}\n\n' +
+                '/* Focus indicators (keyboard navigation) */\n' +
+                'button:focus,\n' +
+                'a:focus,\n' +
+                '.contrast-toggle:focus {\n' +
+                '  outline: 2px solid #00d9ff;\n' +
+                '  outline-offset: 2px;\n' +
+                '}\n\n' +
+                '/* Scroll progress bar */\n' +
+                '.pb {\n' +
+                '  position: fixed;\n' +
+                '  top: 0;\n' +
+                '  left: 0;\n' +
+                '  height: 4px;\n' +
+                '  background: linear-gradient(90deg, var(--p), var(--s));\n' +
+                '  z-index: 1000;\n' +
+                '  width: 0;\n' +
+                '  transition: width 0.3s;\n' +
+                '}\n\n' +
+                '/* High contrast toggle button */\n' +
+                '.contrast-toggle {\n' +
+                '  position: fixed;\n' +
+                '  top: 1rem;\n' +
+                '  right: 1rem;\n' +
+                '  padding: 0.5rem 1rem;\n' +
+                '  background: rgba(255, 255, 255, 0.1);\n' +
+                '  border: 2px solid rgba(255, 255, 255, 0.2);\n' +
+                '  color: #f5f5f5;\n' +
+                '  cursor: pointer;\n' +
+                '  border-radius: 0.5rem;\n' +
+                '  z-index: 1001;\n' +
+                '  font-family: inherit;\n' +
+                '  font-weight: 600;\n' +
+                '}\n\n' +
+                'body[data-contrast="high"] .contrast-toggle {\n' +
+                '  background: #fff;\n' +
+                '  color: #000;\n' +
+                '  border-color: #fff;\n' +
+                '}\n\n' +
+                '/* ========================================\n' +
+                '   FOOTER\n' +
+                '   EDIT THIS SECTION to change footer styling.\n' +
+                '   ======================================== */\n' +
+                'footer {\n' +
+                '  padding: 2rem;\n' +
+                '  border-top: 1px solid rgba(255, 255, 255, 0.1);\n' +
+                '  text-align: center;\n' +
+                '  color: rgba(255, 255, 255, 0.5);\n' +
+                '}';
 
             var accessibilityReport = generateAccessibilityReport(slides, hasTextOverBackground);
             
-            // Build comprehensive commented HTML for non-engineers
+            // Build comprehensive instructional HTML comments for designers/creatives
             var htmlComments = '<!--\n' +
-                '  SCROLLYTELLING SITE - AUTO-GENERATED FROM POWERPOINT\n' +
+                '  ========================================================================\n' +
+                '  SCROLLYTELLING SITE - AUTO-GENERATED FROM YOUR POWERPOINT\n' +
+                '  ========================================================================\n' +
                 '  \n' +
-                '  HOW TO EDIT THIS FILE:\n' +
-                '  - You can safely change any text content between HTML tags\n' +
-                '  - Each section represents one slide from your presentation\n' +
-                '  - Images are embedded as data URLs (they won\'t break if you move this file)\n' +
-                '  - The CSS in the <style> tag controls colors, fonts, and layout\n' +
-                '  - The JavaScript at the bottom makes the scroll progress bar and contrast toggle work\n' +
+                '  ⚠️ IMPORTANT: This file was generated automatically.\n' +
+                '  You are EXPECTED to review and edit it before publishing.\n' +
                 '  \n' +
-                '  IMPORTANT NOTES:\n' +
-                '  - Some headings were automatically detected - please verify they\'re correct\n' +
-                '  - Background images were chosen automatically - you may want to adjust them\n' +
-                '  - Alt text for images was generated - please review for accuracy\n' +
-                '  - This site follows WCAG accessibility guidelines but final compliance depends on your content\n' +
+                '  WHAT YOU CAN SAFELY EDIT:\n' +
+                '  ✓ Any text between HTML tags (headings, paragraphs, list items)\n' +
+                '  ✓ Colors in the CSS (look for the COLOR PALETTE section)\n' +
+                '  ✓ Fonts (change "Titillium Web" to your preferred font)\n' +
+                '  ✓ Spacing values (look for "margin" and "padding" in CSS)\n' +
+                '  ✓ The title and tagline in the hero section\n' +
+                '  ✓ Copyright text in the footer\n' +
+                '  \n' +
+                '  WHAT WAS AUTOMATICALLY DECIDED (please verify):\n' +
+                '  • Headings: Extracted from PowerPoint title placeholders or first text\n' +
+                '  • Background images: Chosen based on size and aspect ratio similarity\n' +
+                '  • Content order: Follows your slide order in PowerPoint\n' +
+                '  • Alt text: Generated based on slide context\n' +
+                '  \n' +
+                '  STRUCTURE OF THIS FILE:\n' +
+                '  • <head>: Contains the page title, fonts, and all CSS styling\n' +
+                '  • <body>: Contains your visible content in sections\n' +
+                '    - Hero section: Your opening slide with main title\n' +
+                '    - Main sections: Each PowerPoint slide becomes one <section>\n' +
+                '    - Footer: Copyright and closing information\n' +
+                '  • <script>: JavaScript that makes interactive features work\n' +
+                '  \n' +
+                '  IMAGES:\n' +
+                '  • All images are embedded as data URLs (base64)\n' +
+                '  • This means the file is larger but completely self-contained\n' +
+                '  • You can move this HTML file anywhere and images will still work\n' +
+                '  • Background images are decorative CSS (no alt text needed)\n' +
+                '  • Inline images have alt text for screen readers\n' +
+                '  \n' +
+                '  ACCESSIBILITY:\n' +
+                '  • This site includes WCAG-ready features like skip links and focus indicators\n' +
+                '  • Final accessibility depends on YOUR content (color contrast, meaningful text)\n' +
+                '  • Test with a screen reader and keyboard navigation before publishing\n' +
+                '  • Check the ACCESSIBILITY_REPORT.txt file in your download for details\n' +
+                '  \n' +
+                '  ========================================================================\n' +
                 '-->\n';
             
-            var cssComments = '/* \n' +
-                '   STYLING - You can edit colors, fonts, and spacing here\n' +
-                '   \n' +
-                '   Color Variables (at the top):\n' +
-                '   --p: Primary color for accents\n' +
-                '   --s: Secondary color for gradients\n' +
-                '   --b1 and --b2: Background gradient colors\n' +
-                '   \n' +
-                '   To change colors, find the :root section and update the color values.\n' +
-                '   To change fonts, find "font-family" and replace "Titillium Web" with your preferred font.\n' +
-                '   To adjust spacing, look for "margin" and "padding" values.\n' +
-                '*/ \n';
-            
-            var result = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width">\n  <title>' + escapeHtml(titleinp.value) + '</title>\n  <!-- Web Font: You can change this to a different Google Font if desired -->\n  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet">\n  <style>\n    ' + cssComments + css + '\n  </style>\n</head>\n<body>\n  ' + htmlComments + '\n  <!-- SKIP LINK: Allows keyboard users to jump directly to content -->\n  <a href="#main" class="skip-link">Skip to main content</a>\n  \n  <!-- HIGH CONTRAST TOGGLE: Clicking this button switches to a black/white color scheme for better visibility -->\n  <button class="contrast-toggle" id="contrastBtn" aria-label="Toggle high contrast mode">High Contrast</button>\n  \n  <!-- PROGRESS BAR: Shows scroll progress as you move down the page -->\n  <div class="pb" id="pb"></div>\n  \n  <!-- HERO SECTION: The opening section of your scrollytelling site -->\n  <!-- You can edit the title and tagline below -->\n  <header id="hero">\n    <div class="ov"></div>\n    <div class="con">\n      <div class="hc">\n        <h1>' + escapeHtml(titleinp.value) + '</h1>\n        <p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p>\n      </div>\n    </div>\n  </header>\n  \n  <!-- MAIN CONTENT: Your slides appear below as sections -->\n  <main id="main">\n      ' + secs + '\n  </main>\n  \n  <!-- FOOTER: You can edit the copyright text below -->\n  <footer>\n    <p>' + escapeHtml(copyinp.value) + '</p>\n  </footer>\n  \n  <!-- JAVASCRIPT: Makes the interactive features work -->\n  <!-- The scroll progress bar updates as you scroll -->\n  <!-- The contrast toggle button switches between normal and high contrast modes -->\n  <script>\n    window.addEventListener("scroll", function() {\n      var scrolled = window.scrollY;\n      var height = document.documentElement.scrollHeight - window.innerHeight;\n      document.getElementById("pb").style.width = (scrolled / height * 100) + "%";\n    });\n    \n    document.getElementById("contrastBtn").addEventListener("click", function() {\n      var isHigh = document.body.getAttribute("data-contrast") === "high";\n      if (isHigh) {\n        document.body.removeAttribute("data-contrast");\n        this.textContent = "High Contrast";\n      } else {\n        document.body.setAttribute("data-contrast", "high");\n        this.textContent = "Normal Contrast";\n      }\n    });\n  <\/script>\n</body>\n</html>';
+            var result = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width">\n  <title>' + escapeHtml(titleinp.value) + '</title>\n  <!-- Web Font: You can change this to a different Google Font if desired -->\n  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet">\n  <style>\n' + css + '\n  </style>\n</head>\n<body>\n' + htmlComments + '\n  <!-- SKIP LINK: Allows keyboard users to jump directly to content -->\n  <a href="#main" class="skip-link">Skip to main content</a>\n  \n  <!-- HIGH CONTRAST TOGGLE: Clicking this button switches to a black/white color scheme for better visibility -->\n  <button class="contrast-toggle" id="contrastBtn" aria-label="Toggle high contrast mode">High Contrast</button>\n  \n  <!-- PROGRESS BAR: Shows scroll progress as you move down the page -->\n  <div class="pb" id="pb"></div>\n  \n  <!-- ========================================\n       HERO SECTION: The opening section of your scrollytelling site\n       EDIT: You can change the title and tagline below\n       ======================================== -->\n  <header id="hero">\n    <div class="ov"></div>\n    <div class="con">\n      <div class="hc">\n        <h1>' + escapeHtml(titleinp.value) + '</h1>\n        <p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p>\n      </div>\n    </div>\n  </header>\n  \n  <!-- ========================================\n       MAIN CONTENT: Your slides appear below as sections\n       Each <section> represents one slide from your PowerPoint.\n       EDIT: You can change the text, images, and order as needed.\n       ======================================== -->\n  <main id="main">\n' + secs + '  </main>\n  \n  <!-- ========================================\n       FOOTER\n       EDIT: You can change the copyright text below\n       ======================================== -->\n  <footer>\n    <p>' + escapeHtml(copyinp.value) + '</p>\n  </footer>\n  \n  <!-- ========================================\n       JAVASCRIPT: Makes the interactive features work\n       \n       This script controls:\n       • Scroll progress bar (updates as you scroll)\n       • High contrast toggle button (switches color schemes)\n       \n       Generally safe to leave as-is unless you want to customize behavior.\n       ======================================== -->\n  <script>\n    // Update progress bar on scroll\n    window.addEventListener("scroll", function() {\n      var scrolled = window.scrollY;\n      var height = document.documentElement.scrollHeight - window.innerHeight;\n      document.getElementById("pb").style.width = (scrolled / height * 100) + "%";\n    });\n    \n    // Toggle high contrast mode\n    document.getElementById("contrastBtn").addEventListener("click", function() {\n      var isHigh = document.body.getAttribute("data-contrast") === "high";\n      if (isHigh) {\n        document.body.removeAttribute("data-contrast");\n        this.textContent = "High Contrast";\n      } else {\n        document.body.setAttribute("data-contrast", "high");\n        this.textContent = "Normal Contrast";\n      }\n    });\n  <\/script>\n</body>\n</html>';
 
             return result;
         }
