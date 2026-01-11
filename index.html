@@ -127,6 +127,193 @@
             sunset: {bg1: '#2e1a0a', bg2: '#4a2e1a', p: '#f97316', s: '#fb923c'}
         };
 
+        // Web-safe font fallbacks
+        var fontFallbacks = {
+            'Arial': 'Arial, sans-serif',
+            'Helvetica': 'Helvetica, Arial, sans-serif',
+            'Times New Roman': '"Times New Roman", Times, serif',
+            'Georgia': 'Georgia, serif',
+            'Courier New': '"Courier New", Courier, monospace',
+            'Verdana': 'Verdana, sans-serif',
+            'Trebuchet MS': '"Trebuchet MS", sans-serif',
+            'Impact': 'Impact, sans-serif',
+            'Comic Sans MS': '"Comic Sans MS", cursive',
+            'default': 'Arial, Helvetica, sans-serif'
+        };
+
+        // Helper function to convert hex to RGB
+        function hexToRgb(hex) {
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        // Helper function to calculate relative luminance
+        function getLuminance(r, g, b) {
+            var a = [r, g, b].map(function(v) {
+                v /= 255;
+                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+            });
+            return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+        }
+
+        // Helper function to check WCAG AA contrast
+        function checkContrast(color1, color2) {
+            var rgb1 = hexToRgb(color1);
+            var rgb2 = hexToRgb(color2);
+            if (!rgb1 || !rgb2) return false;
+            
+            var lum1 = getLuminance(rgb1.r, rgb1.g, rgb1.b);
+            var lum2 = getLuminance(rgb2.r, rgb2.g, rgb2.b);
+            var ratio = (Math.max(lum1, lum2) + 0.05) / (Math.min(lum1, lum2) + 0.05);
+            return ratio >= 4.5; // WCAG AA standard
+        }
+
+        // Extract fonts from theme XML
+        function extractFonts(themeXml) {
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(themeXml, 'text/xml');
+            
+            var fonts = {
+                title: 'Arial, sans-serif',
+                body: 'Arial, sans-serif'
+            };
+            
+            // Try to get major font (typically for headings)
+            var majorFont = doc.querySelector('majorFont latin');
+            if (majorFont) {
+                var typeface = majorFont.getAttribute('typeface');
+                if (typeface) {
+                    fonts.title = fontFallbacks[typeface] || ('"' + typeface + '", ' + fontFallbacks.default);
+                }
+            }
+            
+            // Try to get minor font (typically for body text)
+            var minorFont = doc.querySelector('minorFont latin');
+            if (minorFont) {
+                var typeface = minorFont.getAttribute('typeface');
+                if (typeface) {
+                    fonts.body = fontFallbacks[typeface] || ('"' + typeface + '", ' + fontFallbacks.default);
+                }
+            }
+            
+            return fonts;
+        }
+
+        // Extract colors from theme XML
+        function extractColors(themeXml) {
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(themeXml, 'text/xml');
+            
+            var colors = {
+                bg1: '#0f0a1a',
+                bg2: '#1a0a2e',
+                text: '#f5f5f5',
+                primary: '#00d9ff',
+                secondary: '#a855f7',
+                accent: '#22c55e'
+            };
+            
+            // Extract color scheme
+            var clrScheme = doc.querySelector('clrScheme');
+            if (clrScheme) {
+                // Background colors (dk1, dk2)
+                var dk1 = clrScheme.querySelector('dk1 srgbClr');
+                if (dk1) {
+                    var val = dk1.getAttribute('val');
+                    if (val) colors.bg1 = '#' + val;
+                }
+                
+                var dk2 = clrScheme.querySelector('dk2 srgbClr');
+                if (dk2) {
+                    var val = dk2.getAttribute('val');
+                    if (val) colors.bg2 = '#' + val;
+                }
+                
+                // Text colors (lt1, lt2)
+                var lt1 = clrScheme.querySelector('lt1 srgbClr');
+                if (lt1) {
+                    var val = lt1.getAttribute('val');
+                    if (val) colors.text = '#' + val;
+                }
+                
+                // Accent colors
+                var accent1 = clrScheme.querySelector('accent1 srgbClr');
+                if (accent1) {
+                    var val = accent1.getAttribute('val');
+                    if (val) colors.primary = '#' + val;
+                }
+                
+                var accent2 = clrScheme.querySelector('accent2 srgbClr');
+                if (accent2) {
+                    var val = accent2.getAttribute('val');
+                    if (val) colors.secondary = '#' + val;
+                }
+                
+                var accent3 = clrScheme.querySelector('accent3 srgbClr');
+                if (accent3) {
+                    var val = accent3.getAttribute('val');
+                    if (val) colors.accent = '#' + val;
+                }
+            }
+            
+            // Validate contrast
+            if (!checkContrast(colors.text, colors.bg1)) {
+                colors.text = '#f5f5f5'; // Fallback to white
+            }
+            
+            return colors;
+        }
+
+        // Extract images from PPTX
+        function extractImages(zip) {
+            var images = {};
+            var mediaFolder = zip.folder('ppt/media');
+            if (!mediaFolder) return Promise.resolve(images);
+            
+            var promises = [];
+            Object.keys(mediaFolder.files).forEach(function(filename) {
+                if (filename.match(/\.(png|jpg|jpeg|gif)$/i)) {
+                    var promise = mediaFolder.file(filename).async('base64').then(function(data) {
+                        var ext = filename.split('.').pop().toLowerCase();
+                        var mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+                        images[filename] = 'data:' + mime + ';base64,' + data;
+                    });
+                    promises.push(promise);
+                }
+            });
+            
+            return Promise.all(promises).then(function() { return images; });
+        }
+
+        // Parse slide relationships to map images
+        function parseSlideRelationships(zip, slideNum) {
+            var relsPath = 'ppt/slides/_rels/slide' + slideNum + '.xml.rels';
+            var file = zip.file(relsPath);
+            if (!file) return Promise.resolve({});
+            
+            return file.async('string').then(function(xml) {
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(xml, 'text/xml');
+                var relationships = {};
+                
+                doc.querySelectorAll('Relationship').forEach(function(rel) {
+                    var id = rel.getAttribute('Id');
+                    var target = rel.getAttribute('Target');
+                    var type = rel.getAttribute('Type');
+                    
+                    if (type && type.includes('image')) {
+                        relationships[id] = target.replace('../', '');
+                    }
+                });
+                
+                return relationships;
+            });
+        }
+
         drop.onclick = function() { inp.click(); };
         drop.ondragover = function(e) { e.preventDefault(); drop.classList.add('over'); };
         drop.ondragleave = function() { drop.classList.remove('over'); };
@@ -163,6 +350,7 @@
             var reader = new FileReader();
             reader.onload = function(e) {
                 JSZip.loadAsync(e.target.result).then(function(z) {
+                    zip = z;
                     var slideFolder = z.folder('ppt/slides');
                     if (!slideFolder) {
                         status.textContent = 'No slides found';
@@ -172,31 +360,128 @@
                         return;
                     }
 
-                    var slides = [];
-                    var files = Object.keys(slideFolder.files).filter(function(f) { return f.match(/slide\d+\.xml$/); }).sort();
+                    // Extract theme data
+                    var themePromise = z.file('ppt/theme/theme1.xml');
+                    var themeFonts = null;
+                    var themeColors = null;
                     
-                    var count = 0;
-                    files.forEach(function(f) {
-                        slideFolder.file(f).async('string').then(function(xml) {
-                            var parser = new DOMParser();
-                            var doc = parser.parseFromString(xml, 'text/xml');
-                            var texts = doc.querySelectorAll('a:t');
-                            var txt = '';
-                            texts.forEach(function(t) { txt += t.textContent + ' '; });
-                            slides.push({text: txt.trim()});
+                    if (themePromise) {
+                        themePromise.async('string').then(function(themeXml) {
+                            themeFonts = extractFonts(themeXml);
+                            themeColors = extractColors(themeXml);
+                        }).catch(function() {
+                            // Use defaults if theme extraction fails
+                            themeFonts = { title: fontFallbacks.default, body: fontFallbacks.default };
+                            themeColors = themes[theme];
+                        });
+                    }
+
+                    // Extract images
+                    extractImages(z).then(function(images) {
+                        var slides = [];
+                        var files = Object.keys(slideFolder.files).filter(function(f) { 
+                            return f.match(/slide\d+\.xml$/); 
+                        }).sort();
+                        
+                        var count = 0;
+                        var slidePromises = [];
+                        
+                        files.forEach(function(f, idx) {
+                            var slideNum = idx + 1;
+                            var slidePromise = Promise.all([
+                                slideFolder.file(f).async('string'),
+                                parseSlideRelationships(z, slideNum)
+                            ]).then(function(results) {
+                                var xml = results[0];
+                                var rels = results[1];
+                                var parser = new DOMParser();
+                                var doc = parser.parseFromString(xml, 'text/xml');
+                                
+                                // Extract text with structure
+                                var slideData = {
+                                    title: '',
+                                    content: [],
+                                    bgImage: null,
+                                    images: []
+                                };
+                                
+                                // Extract titles and content
+                                var shapes = doc.querySelectorAll('p\\:sp, sp');
+                                var isFirstText = true;
+                                
+                                shapes.forEach(function(shape) {
+                                    var texts = shape.querySelectorAll('a\\:t, t');
+                                    if (texts.length > 0) {
+                                        var txt = '';
+                                        texts.forEach(function(t) { 
+                                            txt += t.textContent + ' '; 
+                                        });
+                                        txt = txt.trim();
+                                        
+                                        if (txt) {
+                                            if (isFirstText) {
+                                                slideData.title = txt;
+                                                isFirstText = false;
+                                            } else {
+                                                slideData.content.push(txt);
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Extract inline images
+                                    var blips = shape.querySelectorAll('a\\:blip, blip');
+                                    blips.forEach(function(blip) {
+                                        var embedId = blip.getAttribute('r:embed') || blip.getAttribute('embed');
+                                        if (embedId && rels[embedId]) {
+                                            var imgPath = 'ppt/' + rels[embedId];
+                                            if (images[imgPath]) {
+                                                slideData.images.push({
+                                                    src: images[imgPath],
+                                                    alt: 'Slide ' + slideNum + ' image'
+                                                });
+                                            }
+                                        }
+                                    });
+                                });
+                                
+                                // Check for background image
+                                var bgBlips = doc.querySelectorAll('p\\:bg a\\:blip, bg blip');
+                                bgBlips.forEach(function(blip) {
+                                    var embedId = blip.getAttribute('r:embed') || blip.getAttribute('embed');
+                                    if (embedId && rels[embedId]) {
+                                        var imgPath = 'ppt/' + rels[embedId];
+                                        if (images[imgPath]) {
+                                            slideData.bgImage = images[imgPath];
+                                        }
+                                    }
+                                });
+                                
+                                slides.push(slideData);
+                            });
                             
-                            count++;
-                            if (count === files.length) {
-                                html = makeHTML(slides);
-                                zip = z;
+                            slidePromises.push(slidePromise);
+                        });
+                        
+                        Promise.all(slidePromises).then(function() {
+                            // Wait a bit for theme extraction
+                            setTimeout(function() {
+                                var fonts = themeFonts || { title: fontFallbacks.default, body: fontFallbacks.default };
+                                var colors = themeColors || themes[theme];
+                                
+                                html = makeHTML(slides, fonts, colors, images);
                                 iframe.srcdoc = html;
                                 prev.classList.add('show');
                                 load.style.display = 'none';
                                 gen.disabled = false;
                                 status.textContent = 'Preview ready';
                                 status.className = 'msg show ok';
-                            }
+                            }, 300);
                         });
+                    }).catch(function(e) {
+                        status.textContent = 'Error: ' + e.message;
+                        status.className = 'msg show err';
+                        load.style.display = 'none';
+                        gen.disabled = false;
                     });
                 }).catch(function(e) {
                     status.textContent = 'Error: ' + e.message;
@@ -208,34 +493,302 @@
             reader.readAsArrayBuffer(file);
         };
 
-        function makeHTML(slides) {
-            var t = themes[theme];
+        function makeHTML(slides, fonts, colors, images) {
+            // Use extracted colors or fallback to theme
+            var t = colors || themes[theme];
+            var titleFont = fonts.title || fontFallbacks.default;
+            var bodyFont = fonts.body || fontFallbacks.default;
+            
+            // Generate sections with extracted content
             var secs = '';
             for (var i = 0; i < slides.length; i++) {
-                secs += '<section><div class="ov"></div><div class="con"><h2>Section ' + (i+1) + '</h2><p>' + slides[i].text + '</p></div></section>';
+                var slide = slides[i];
+                var bgStyle = slide.bgImage ? 
+                    'style="background-image: url(\'' + slide.bgImage + '\'); background-size: cover; background-position: center;"' : '';
+                
+                var contentHtml = '';
+                
+                // Add title if exists
+                if (slide.title) {
+                    contentHtml += '<h2>' + escapeHtml(slide.title) + '</h2>';
+                }
+                
+                // Add content paragraphs
+                slide.content.forEach(function(text) {
+                    contentHtml += '<p>' + escapeHtml(text) + '</p>';
+                });
+                
+                // Add inline images
+                slide.images.forEach(function(img) {
+                    contentHtml += '<img src="' + img.src + '" alt="' + escapeHtml(img.alt) + '" style="max-width: 100%; height: auto; margin: 1rem 0; border-radius: 0.5rem;">';
+                });
+                
+                // If no content, add placeholder
+                if (!contentHtml) {
+                    contentHtml = '<h2>Section ' + (i+1) + '</h2><p>Content from slide ' + (i+1) + '</p>';
+                }
+                
+                secs += '<section ' + bgStyle + '><div class="ov"></div><div class="con">' + contentHtml + '</div></section>';
             }
 
-            var css = '*{margin:0;padding:0;box-sizing:border-box}:root{--p:' + t.p + ';--s:' + t.s + ';--b1:' + t.bg1 + ';--b2:' + t.bg2 + '}html{scroll-behavior:smooth}body{font-family:Titillium Web,sans-serif;background:linear-gradient(135deg,var(--b1),var(--b2));color:#f5f5f5;line-height:1.6}.pb{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--p),var(--s));z-index:1000;width:0;transition:width 0.3s}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 0}@media(min-width:1024px){section{min-height:100vh;padding:0}}.con{max-width:1200px;margin:0 auto;padding:2rem;width:100%;position:relative;z-index:10}h1{font-size:clamp(2.5rem,8vw,5rem);font-weight:700;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--p),#fff,var(--s));-webkit-background-clip:text;-webkit-text-fill-color:transparent}h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;margin-bottom:2rem}p{font-size:1.1rem;color:rgba(255,255,255,0.8);margin-bottom:1rem}.ov{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,rgba(26,10,46,0.8),rgba(26,10,46,0.6));z-index:2}#hero{background:linear-gradient(135deg,var(--b1),var(--b2))}.hc{text-align:center;animation:fadeIn 1s}@keyframes fadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}footer{padding:2rem;border-top:1px solid rgba(255,255,255,0.1);text-align:center;color:rgba(255,255,255,0.5)}';
+            // CSS with CSS variables for easy editing and accessibility features
+            var css = '/* PPTX to Scrollytelling - Editable Design */\n\n';
+            css += '/* CSS Variables - Edit these to customize the design */\n';
+            css += ':root {\n';
+            css += '  /* Colors extracted from PPTX theme */\n';
+            css += '  --color-primary: ' + (t.primary || t.p) + ';\n';
+            css += '  --color-secondary: ' + (t.secondary || t.s) + ';\n';
+            css += '  --color-bg1: ' + (t.bg1 || t.bg1) + ';\n';
+            css += '  --color-bg2: ' + (t.bg2 || t.bg2) + ';\n';
+            css += '  --color-text: ' + (t.text || '#f5f5f5') + ';\n';
+            css += '  --color-accent: ' + (t.accent || '#22c55e') + ';\n';
+            css += '  \n';
+            css += '  /* Fonts extracted from PPTX theme */\n';
+            css += '  --font-title: ' + titleFont + ';\n';
+            css += '  --font-body: ' + bodyFont + ';\n';
+            css += '  \n';
+            css += '  /* Spacing and sizing */\n';
+            css += '  --spacing-sm: 0.5rem;\n';
+            css += '  --spacing-md: 1rem;\n';
+            css += '  --spacing-lg: 2rem;\n';
+            css += '}\n\n';
+            
+            css += '/* Reset and base styles */\n';
+            css += '* { margin: 0; padding: 0; box-sizing: border-box; }\n\n';
+            
+            css += '/* Skip link for accessibility */\n';
+            css += '.skip-link {\n';
+            css += '  position: absolute;\n';
+            css += '  top: -40px;\n';
+            css += '  left: 0;\n';
+            css += '  background: var(--color-primary);\n';
+            css += '  color: var(--color-bg1);\n';
+            css += '  padding: 8px;\n';
+            css += '  text-decoration: none;\n';
+            css += '  z-index: 10000;\n';
+            css += '  font-weight: bold;\n';
+            css += '}\n';
+            css += '.skip-link:focus {\n';
+            css += '  top: 0;\n';
+            css += '}\n\n';
+            
+            css += '/* Focus indicators for keyboard accessibility */\n';
+            css += 'a:focus, button:focus, input:focus {\n';
+            css += '  outline: 3px solid var(--color-primary);\n';
+            css += '  outline-offset: 2px;\n';
+            css += '}\n\n';
+            
+            css += '/* High contrast mode */\n';
+            css += 'body.high-contrast {\n';
+            css += '  --color-bg1: #000000;\n';
+            css += '  --color-bg2: #000000;\n';
+            css += '  --color-text: #ffffff;\n';
+            css += '}\n';
+            css += 'body.high-contrast .ov {\n';
+            css += '  background: rgba(0, 0, 0, 0.9) !important;\n';
+            css += '}\n\n';
+            
+            css += 'html { scroll-behavior: smooth; }\n\n';
+            
+            css += '/* Body and layout */\n';
+            css += 'body {\n';
+            css += '  font-family: var(--font-body);\n';
+            css += '  background: linear-gradient(135deg, var(--color-bg1), var(--color-bg2));\n';
+            css += '  color: var(--color-text);\n';
+            css += '  line-height: 1.6;\n';
+            css += '}\n\n';
+            
+            css += '/* Progress bar */\n';
+            css += '.pb {\n';
+            css += '  position: fixed;\n';
+            css += '  top: 0;\n';
+            css += '  left: 0;\n';
+            css += '  height: 4px;\n';
+            css += '  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));\n';
+            css += '  z-index: 1000;\n';
+            css += '  width: 0;\n';
+            css += '  transition: width 0.3s;\n';
+            css += '}\n\n';
+            
+            css += '/* Section layout */\n';
+            css += 'section {\n';
+            css += '  min-height: auto;\n';
+            css += '  display: flex;\n';
+            css += '  align-items: center;\n';
+            css += '  position: relative;\n';
+            css += '  overflow: hidden;\n';
+            css += '  padding: 72px 0;\n';
+            css += '}\n';
+            css += '@media (min-width: 1024px) {\n';
+            css += '  section { min-height: 100vh; padding: 0; }\n';
+            css += '}\n\n';
+            
+            css += '/* Content container */\n';
+            css += '.con {\n';
+            css += '  max-width: 1200px;\n';
+            css += '  margin: 0 auto;\n';
+            css += '  padding: var(--spacing-lg);\n';
+            css += '  width: 100%;\n';
+            css += '  position: relative;\n';
+            css += '  z-index: 10;\n';
+            css += '}\n\n';
+            
+            css += '/* Typography */\n';
+            css += 'h1 {\n';
+            css += '  font-family: var(--font-title);\n';
+            css += '  font-size: clamp(2.5rem, 8vw, 5rem);\n';
+            css += '  font-weight: 700;\n';
+            css += '  margin-bottom: 1.5rem;\n';
+            css += '  background: linear-gradient(135deg, var(--color-primary), #fff, var(--color-secondary));\n';
+            css += '  -webkit-background-clip: text;\n';
+            css += '  -webkit-text-fill-color: transparent;\n';
+            css += '  background-clip: text;\n';
+            css += '}\n\n';
+            
+            css += 'h2 {\n';
+            css += '  font-family: var(--font-title);\n';
+            css += '  font-size: clamp(2rem, 5vw, 3.5rem);\n';
+            css += '  font-weight: 700;\n';
+            css += '  margin-bottom: var(--spacing-lg);\n';
+            css += '}\n\n';
+            
+            css += 'p {\n';
+            css += '  font-size: 1.1rem;\n';
+            css += '  color: rgba(255, 255, 255, 0.8);\n';
+            css += '  margin-bottom: var(--spacing-md);\n';
+            css += '}\n\n';
+            
+            css += '/* Overlay for readability */\n';
+            css += '.ov {\n';
+            css += '  position: absolute;\n';
+            css += '  top: 0;\n';
+            css += '  left: 0;\n';
+            css += '  width: 100%;\n';
+            css += '  height: 100%;\n';
+            css += '  background: linear-gradient(135deg, rgba(26, 10, 46, 0.8), rgba(26, 10, 46, 0.6));\n';
+            css += '  z-index: 2;\n';
+            css += '}\n\n';
+            
+            css += '/* Hero section */\n';
+            css += '#hero {\n';
+            css += '  background: linear-gradient(135deg, var(--color-bg1), var(--color-bg2));\n';
+            css += '}\n\n';
+            
+            css += '.hc {\n';
+            css += '  text-align: center;\n';
+            css += '  animation: fadeIn 1s;\n';
+            css += '}\n\n';
+            
+            css += '@keyframes fadeIn {\n';
+            css += '  from { opacity: 0; transform: translateY(30px); }\n';
+            css += '  to { opacity: 1; transform: translateY(0); }\n';
+            css += '}\n\n';
+            
+            css += '/* Accessibility toggle button */\n';
+            css += '.contrast-toggle {\n';
+            css += '  position: fixed;\n';
+            css += '  top: 1rem;\n';
+            css += '  right: 1rem;\n';
+            css += '  background: var(--color-primary);\n';
+            css += '  color: var(--color-bg1);\n';
+            css += '  border: none;\n';
+            css += '  padding: 0.75rem 1rem;\n';
+            css += '  border-radius: 0.5rem;\n';
+            css += '  cursor: pointer;\n';
+            css += '  font-weight: bold;\n';
+            css += '  z-index: 9999;\n';
+            css += '  font-family: var(--font-body);\n';
+            css += '}\n\n';
+            
+            css += '/* Footer */\n';
+            css += 'footer {\n';
+            css += '  padding: var(--spacing-lg);\n';
+            css += '  border-top: 1px solid rgba(255, 255, 255, 0.1);\n';
+            css += '  text-align: center;\n';
+            css += '  color: rgba(255, 255, 255, 0.5);\n';
+            css += '}\n';
 
-            var result = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + titleinp.value + '</title><link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="pb" id="pb"></div><section id="hero"><div class="ov"></div><div class="con"><div class="hc"><h1>' + titleinp.value + '</h1><p style="font-size:1.3rem;color:rgba(255,255,255,0.6)">Scroll to explore</p></div></div></section>' + secs + '<footer><p>' + copyinp.value + '</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"})<\/script></body></html>';
+            // Build HTML with accessibility features and comments
+            var result = '<!DOCTYPE html>\n';
+            result += '<html lang="en">\n';
+            result += '<head>\n';
+            result += '  <meta charset="UTF-8">\n';
+            result += '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+            result += '  <title>' + escapeHtml(titleinp.value) + '</title>\n';
+            result += '  <!-- Fonts and colors extracted from PPTX theme -->\n';
+            result += '  <style>\n' + css + '  </style>\n';
+            result += '</head>\n';
+            result += '<body>\n';
+            result += '  <!-- Skip link for keyboard navigation -->\n';
+            result += '  <a href="#main-content" class="skip-link">Skip to main content</a>\n\n';
+            result += '  <!-- High contrast toggle for accessibility -->\n';
+            result += '  <button class="contrast-toggle" id="contrastToggle" aria-label="Toggle high contrast mode">High Contrast</button>\n\n';
+            result += '  <!-- Progress bar -->\n';
+            result += '  <div class="pb" id="pb" role="progressbar" aria-label="Reading progress"></div>\n\n';
+            result += '  <!-- Hero section -->\n';
+            result += '  <section id="hero">\n';
+            result += '    <div class="ov"></div>\n';
+            result += '    <div class="con">\n';
+            result += '      <div class="hc">\n';
+            result += '        <h1>' + escapeHtml(titleinp.value) + '</h1>\n';
+            result += '        <p style="font-size: 1.3rem; color: rgba(255,255,255,0.6)">Scroll to explore</p>\n';
+            result += '      </div>\n';
+            result += '    </div>\n';
+            result += '  </section>\n\n';
+            result += '  <!-- Main content sections from PPTX slides -->\n';
+            result += '  <main id="main-content">\n';
+            result += secs;
+            result += '  </main>\n\n';
+            result += '  <!-- Footer -->\n';
+            result += '  <footer>\n';
+            result += '    <p>' + escapeHtml(copyinp.value) + '</p>\n';
+            result += '  </footer>\n\n';
+            result += '  <!-- Accessibility and interaction scripts -->\n';
+            result += '  <script>\n';
+            result += '    // Progress bar\n';
+            result += '    window.addEventListener("scroll", function() {\n';
+            result += '      var scrollTop = window.scrollY;\n';
+            result += '      var docHeight = document.documentElement.scrollHeight - window.innerHeight;\n';
+            result += '      var progress = (scrollTop / docHeight) * 100;\n';
+            result += '      document.getElementById("pb").style.width = progress + "%";\n';
+            result += '      document.getElementById("pb").setAttribute("aria-valuenow", Math.round(progress));\n';
+            result += '    });\n\n';
+            result += '    // High contrast toggle\n';
+            result += '    document.getElementById("contrastToggle").addEventListener("click", function() {\n';
+            result += '      document.body.classList.toggle("high-contrast");\n';
+            result += '      var isHighContrast = document.body.classList.contains("high-contrast");\n';
+            result += '      this.textContent = isHighContrast ? "Normal Contrast" : "High Contrast";\n';
+            result += '      this.setAttribute("aria-pressed", isHighContrast);\n';
+            result += '    });\n';
+            result += '  <\/script>\n';
+            result += '</body>\n';
+            result += '</html>';
 
             return result;
         }
 
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         down.onclick = function() {
-            if (!zip) return;
+            if (!html) return;
             down.disabled = true;
-            zip.generateAsync({type: 'blob'}).then(function(blob) {
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url;
-                a.download = 'scrollytelling.zip';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                down.disabled = false;
-            });
+            
+            // Create a blob with the HTML content
+            var blob = new Blob([html], { type: 'text/html' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'scrollytelling.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            down.disabled = false;
         };
 
         edit.onclick = function() {
