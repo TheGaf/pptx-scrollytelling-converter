@@ -325,6 +325,101 @@
         let currentPPTX = null;
         let generatedHTML = null;
         let generatedAssets = {};
+        let generatedAccessibilityReport = '';
+        
+        // FIX 6: Generate accessibility report
+        function generateAccessibilityReport(theme, designSystem, hierarchyWarnings) {
+            let report = 'ACCESSIBILITY REPORT\n';
+            report += '===================\n\n';
+            report += `Generated: ${new Date().toISOString()}\n\n`;
+            
+            // Detected Fonts
+            report += 'DETECTED FONTS\n';
+            report += '--------------\n';
+            const detectedFonts = Array.from(theme.detectedFonts || []);
+            if (detectedFonts.length > 0) {
+                detectedFonts.forEach(font => {
+                    report += `- ${font}\n`;
+                });
+            } else {
+                report += 'No fonts detected from PPTX\n';
+            }
+            report += '\n';
+            
+            // Font Mappings
+            report += 'FONT MAPPINGS\n';
+            report += '-------------\n';
+            if (designSystem.fontMappings.length > 0) {
+                designSystem.fontMappings.forEach(mapping => {
+                    report += `- "${mapping.original}" → "${mapping.mapped}"`;
+                    if (mapping.fromGoogleFonts) {
+                        report += ' (Google Fonts)';
+                    } else if (mapping.fallbackCategory) {
+                        report += ` (Web-safe fallback: ${mapping.fallbackCategory})`;
+                    }
+                    report += '\n';
+                });
+            } else {
+                report += 'No font mappings performed\n';
+            }
+            report += '\n';
+            
+            // Google Fonts Loaded
+            report += 'GOOGLE FONTS LOADED\n';
+            report += '-------------------\n';
+            if (designSystem.googleFontsUsed.length > 0) {
+                designSystem.googleFontsUsed.forEach(font => {
+                    report += `- ${font}\n`;
+                });
+            } else {
+                report += 'No Google Fonts loaded (using web-safe fonts only)\n';
+            }
+            report += '\n';
+            
+            // Theme Colors
+            report += 'EXTRACTED THEME COLORS\n';
+            report += '----------------------\n';
+            report += `Background: ${theme.colors.background}\n`;
+            report += `Foreground: ${theme.colors.foreground}\n`;
+            report += `Primary: ${theme.colors.primary}\n`;
+            report += `Secondary: ${theme.colors.secondary}\n`;
+            report += `Accent: ${theme.colors.accent}\n`;
+            report += `Muted: ${theme.colors.muted}\n`;
+            report += '\n';
+            
+            // Contrast Adjustments
+            report += 'CONTRAST ADJUSTMENTS\n';
+            report += '--------------------\n';
+            if (theme.contrastAdjustments && theme.contrastAdjustments.length > 0) {
+                theme.contrastAdjustments.forEach(adj => {
+                    report += `- ${adj.type}: ${adj.original} → ${adj.adjusted}\n`;
+                    report += `  Reason: ${adj.reason}\n`;
+                });
+            } else {
+                report += 'No contrast adjustments were necessary\n';
+            }
+            report += '\n';
+            
+            // Warnings
+            report += 'WARNINGS\n';
+            report += '--------\n';
+            const allWarnings = [
+                ...(theme.warnings || []),
+                ...(designSystem.warnings || []),
+                ...(hierarchyWarnings || [])
+            ];
+            
+            if (allWarnings.length > 0) {
+                allWarnings.forEach(warning => {
+                    report += `- ${warning}\n`;
+                });
+            } else {
+                report += 'No warnings\n';
+            }
+            report += '\n';
+            
+            return report;
+        }
 
         // ============================================
         // HIERARCHY ENGINE
@@ -333,76 +428,131 @@
             constructor() {
                 this.slides = [];
                 this.globalElements = new Map();
+                this.chromeElements = new Set();
+                this.warnings = [];
             }
 
             analyzeSlides(slides) {
                 this.slides = slides;
+                this.normalizeSlideSize();
                 this.detectGlobalElements();
                 this.scoreElements();
                 return this.classifySlides();
             }
 
-            detectGlobalElements() {
-                // Track recurring text, images, and their positions
-                const textFrequency = new Map();
-                const imageFrequency = new Map();
-                const positionClusters = { top: [], bottom: [], left: [], right: [] };
-
-                this.slides.forEach((slide, idx) => {
-                    // Track text with position awareness
+            // FIX 1: Slide size normalization
+            normalizeSlideSize() {
+                this.slides.forEach(slide => {
+                    let maxWidth = 0, maxHeight = 0;
+                    
+                    // Compute max dimensions from all elements
                     slide.textRuns?.forEach(run => {
-                        const key = run.text.substring(0, 50);
-                        textFrequency.set(key, (textFrequency.get(key) || 0) + 1);
-                        
-                        // Track position for chrome detection (logos, headers, footers)
                         if (run.geometry) {
-                            // Top 10% of slide (headers/logos)
-                            if (run.geometry.y < 100) {
-                                positionClusters.top.push({ type: 'text', key, slideIdx: idx });
-                            }
-                            // Bottom 10% of slide (footers)
-                            if (run.geometry.y > 600) {
-                                positionClusters.bottom.push({ type: 'text', key, slideIdx: idx });
-                            }
+                            maxWidth = Math.max(maxWidth, run.geometry.x + run.geometry.width);
+                            maxHeight = Math.max(maxHeight, run.geometry.y + run.geometry.height);
                         }
                     });
-
-                    // Track images with position awareness
+                    
                     slide.images?.forEach(img => {
-                        imageFrequency.set(img.name, (imageFrequency.get(img.name) || 0) + 1);
-                        
-                        // Track position for chrome detection
                         if (img.geometry) {
-                            if (img.geometry.y < 100) {
-                                positionClusters.top.push({ type: 'image', key: img.name, slideIdx: idx });
-                            }
-                            if (img.geometry.y > 600) {
-                                positionClusters.bottom.push({ type: 'image', key: img.name, slideIdx: idx });
-                            }
-                            if (img.geometry.x < 100) {
-                                positionClusters.left.push({ type: 'image', key: img.name, slideIdx: idx });
-                            }
-                            if (img.geometry.x > 900) {
-                                positionClusters.right.push({ type: 'image', key: img.name, slideIdx: idx });
-                            }
+                            maxWidth = Math.max(maxWidth, img.geometry.x + img.geometry.width);
+                            maxHeight = Math.max(maxHeight, img.geometry.y + img.geometry.height);
                         }
+                    });
+                    
+                    // Store normalized slide dimensions (or use defaults if no elements)
+                    slide.slideWidth = maxWidth > 0 ? maxWidth : 960;
+                    slide.slideHeight = maxHeight > 0 ? maxHeight : 720;
+                });
+            }
+
+            // Helper to get edge bucket for an element
+            getEdgeBucket(geometry, slideWidth, slideHeight) {
+                if (!geometry) return 'center';
+                
+                const y = geometry.y;
+                const x = geometry.x;
+                
+                // Normalized edge thresholds (12% and 88%)
+                if (y < 0.12 * slideHeight) return 'top';
+                if (y > 0.88 * slideHeight) return 'bottom';
+                if (x < 0.12 * slideWidth) return 'left';
+                if (x > 0.88 * slideWidth) return 'right';
+                
+                return 'center';
+            }
+
+            // Normalize text for keying
+            normalizeText(text) {
+                return text.trim().replace(/\s+/g, ' ').toLowerCase();
+            }
+
+            // FIX 2: Chrome detection with normalized edge buckets
+            detectGlobalElements() {
+                // Track element occurrences with edge bucket
+                const textOccurrences = new Map(); // key: normalizedText + edgeBucket
+                const imageOccurrences = new Map(); // key: fileName + edgeBucket
+                
+                this.slides.forEach((slide, idx) => {
+                    // Track text with edge bucket
+                    slide.textRuns?.forEach(run => {
+                        const normalizedText = this.normalizeText(run.text);
+                        const bucket = this.getEdgeBucket(run.geometry, slide.slideWidth, slide.slideHeight);
+                        const key = `${normalizedText}|${bucket}`;
+                        
+                        if (!textOccurrences.has(key)) {
+                            textOccurrences.set(key, new Set());
+                        }
+                        textOccurrences.get(key).add(idx);
+                    });
+                    
+                    // Track images with edge bucket
+                    slide.images?.forEach(img => {
+                        const bucket = this.getEdgeBucket(img.geometry, slide.slideWidth, slide.slideHeight);
+                        const key = `${img.name}|${bucket}`;
+                        
+                        if (!imageOccurrences.has(key)) {
+                            imageOccurrences.set(key, new Set());
+                        }
+                        imageOccurrences.get(key).add(idx);
                     });
                 });
-
-                // Mark recurring elements as global (appears in 80%+ of slides)
-                const threshold = Math.ceil(this.slides.length * 0.8);
-                textFrequency.forEach((count, text) => {
-                    if (count >= threshold) {
-                        this.globalElements.set(`text:${text}`, { type: 'text', count, isChrome: true });
+                
+                // Mark as chrome if appears in >= 70% of slides
+                const threshold = Math.ceil(this.slides.length * 0.70);
+                
+                textOccurrences.forEach((slideIndices, key) => {
+                    if (slideIndices.size >= threshold) {
+                        this.chromeElements.add(key);
+                        this.globalElements.set(key, { type: 'text', count: slideIndices.size, isChrome: true });
                     }
                 });
-                imageFrequency.forEach((count, name) => {
-                    if (count >= threshold) {
-                        this.globalElements.set(`image:${name}`, { type: 'image', count, isChrome: true });
+                
+                imageOccurrences.forEach((slideIndices, key) => {
+                    if (slideIndices.size >= threshold) {
+                        this.chromeElements.add(key);
+                        this.globalElements.set(key, { type: 'image', count: slideIndices.size, isChrome: true });
                     }
                 });
             }
 
+            // Check if element is chrome
+            isChrome(element, slideWidth, slideHeight) {
+                const bucket = this.getEdgeBucket(element.geometry, slideWidth, slideHeight);
+                
+                if (element.text) {
+                    const normalizedText = this.normalizeText(element.text);
+                    const key = `${normalizedText}|${bucket}`;
+                    return this.chromeElements.has(key);
+                } else if (element.name) {
+                    const key = `${element.name}|${bucket}`;
+                    return this.chromeElements.has(key);
+                }
+                
+                return false;
+            }
+
+            // FIX 3: Salience scoring with chrome penalty
             scoreElements() {
                 this.slides.forEach(slide => {
                     // Score text runs with real geometry and font data
@@ -415,10 +565,18 @@
                         const size = run.fontSize || 18;
                         const area = (run.geometry.width * run.geometry.height) / 10000; // Normalized area
                         const isBold = run.bold ? 1 : 0;
-                        const isUnique = !this.globalElements.has(`text:${run.text.substring(0, 50)}`) ? 1 : 0;
+                        const chrome = this.isChrome(run, slide.slideWidth, slide.slideHeight);
                         
                         // Salience based on: font size (40%), area (30%), bold (15%), uniqueness (15%)
-                        run.salience = (size / 72) * 0.4 + Math.min(area, 1) * 0.3 + isBold * 0.15 + isUnique * 0.15;
+                        let salience = (size / 72) * 0.4 + Math.min(area, 1) * 0.3 + isBold * 0.15 + (chrome ? 0 : 0.15);
+                        
+                        // Apply strong chrome penalty
+                        if (chrome) {
+                            salience *= 0.1;
+                        }
+                        
+                        run.salience = salience;
+                        run.isChrome = chrome;
                     });
 
                     // Score images with real geometry
@@ -428,11 +586,19 @@
                             img.geometry = { x: 0, y: 0, width: 400, height: 300 };
                         }
                         
-                        const isUnique = !this.globalElements.has(`image:${img.name}`) ? 1 : 0;
+                        const chrome = this.isChrome(img, slide.slideWidth, slide.slideHeight);
                         const area = (img.geometry.width * img.geometry.height) / 1000000; // Normalized area
                         
                         // Salience based on: area (70%), uniqueness (30%)
-                        img.salience = Math.min(area * 0.7, 0.7) + isUnique * 0.3;
+                        let salience = Math.min(area * 0.7, 0.7) + (chrome ? 0 : 0.3);
+                        
+                        // Apply strong chrome penalty
+                        if (chrome) {
+                            salience *= 0.1;
+                        }
+                        
+                        img.salience = salience;
+                        img.isChrome = chrome;
                     });
                 });
             }
@@ -462,12 +628,22 @@
                 return 'content';
             }
 
+            // FIX 3: Update getPrimaryElement to exclude chrome unless no alternatives
             getPrimaryElement(slide) {
                 const allElements = [
                     ...(slide.images || []),
                     ...(slide.textRuns || [])
                 ];
 
+                // First try to get non-chrome element with highest salience
+                const nonChromeElements = allElements.filter(el => !el.isChrome);
+                if (nonChromeElements.length > 0) {
+                    return nonChromeElements.reduce((max, el) => 
+                        (el.salience || 0) > (max.salience || 0) ? el : max
+                    , nonChromeElements[0]);
+                }
+                
+                // Fall back to any element if all are chrome
                 return allElements.reduce((max, el) => 
                     (el.salience || 0) > (max.salience || 0) ? el : max
                 , null);
@@ -524,7 +700,8 @@
                 let html = '<div class="product-grid">';
                 
                 if (primary && primary.name) {
-                    html += `<div class="product-image"><img src="assets/${primary.name}" alt="Product" /></div>`;
+                    const altText = this.escapeHtml(secondary?.[0]?.text || primary.name);
+                    html += `<div class="product-image"><img src="assets/${primary.name}" alt="${altText}" /></div>`;
                 }
 
                 html += '<div>';
@@ -585,7 +762,8 @@
                 let html = '<div class="product-grid">';
 
                 if (primary && primary.name) {
-                    html += `<div class="product-image"><img src="assets/${primary.name}" alt="Content" /></div>`;
+                    const altText = this.escapeHtml(slide.textRuns?.[0]?.text || primary.name);
+                    html += `<div class="product-image"><img src="assets/${primary.name}" alt="${altText}" /></div>`;
                 }
 
                 html += '<div>';
@@ -609,7 +787,8 @@
                 });
 
                 slide.images?.forEach(img => {
-                    html += `<img src="assets/${img.name}" alt="Content" style="max-width: 100%; margin: 1rem 0;" />`;
+                    const altText = this.escapeHtml(slide.textRuns?.[0]?.text || img.name);
+                    html += `<img src="assets/${img.name}" alt="${altText}" class="content-image" />`;
                 });
 
                 html += '</div>';
@@ -627,14 +806,24 @@
         // DESIGN SYSTEM
         // ============================================
         class DesignSystem {
-            constructor(themeData) {
+            constructor(themeData, detectedFonts = []) {
                 // Use PPTX-extracted theme data only
                 this.colors = themeData.colors;
                 this.fonts = themeData.fonts;
+                this.detectedFonts = detectedFonts;
+                this.googleFontsUsed = [];
+                this.fontMappings = [];
+                this.warnings = [];
+                
+                // FIX 5: Google Fonts allowlist
+                this.googleFontsAllowlist = [
+                    'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Oswald',
+                    'Raleway', 'PT Sans', 'Merriweather', 'Nunito', 'Playfair Display'
+                ];
             }
 
-            // Map PPTX font to Google Fonts with category-based fallback
-            mapFontToWebSafe(fontFamily) {
+            // FIX 5: Map PPTX font to Google Fonts with category-based fallback
+            mapFontToWebSafe(fontFamily, recordMapping = false) {
                 // Common Google Fonts mapping for known Office fonts
                 const fontMap = {
                     'Calibri': 'Roboto',
@@ -655,36 +844,84 @@
                     'Franklin Gothic': 'Franklin Gothic Medium'
                 };
                 
-                // Check if font is directly available
+                let mappedFont = fontFamily;
+                let fromGoogleFonts = false;
+                let fallbackCategory = null;
+                
+                // Check if font is directly available in web-safe
                 if (fontMap[fontFamily]) {
-                    return fontMap[fontFamily];
+                    mappedFont = fontMap[fontFamily];
+                } else {
+                    // Categorize by font family type and return generic fallback
+                    const sansSerifFonts = /sans|arial|helvetica|verdana|tahoma|trebuchet|calibri|segoe/i;
+                    const serifFonts = /serif|times|georgia|garamond|palatino|century/i;
+                    const monoFonts = /mono|courier|consolas|monaco/i;
+                    
+                    if (monoFonts.test(fontFamily)) {
+                        mappedFont = 'Courier New, monospace';
+                        fallbackCategory = 'monospace';
+                        this.warnings.push(`Font "${fontFamily}" not in Google Fonts, falling back to monospace`);
+                    } else if (serifFonts.test(fontFamily)) {
+                        mappedFont = 'Georgia, serif';
+                        fallbackCategory = 'serif';
+                        this.warnings.push(`Font "${fontFamily}" not in Google Fonts, falling back to serif`);
+                    } else if (sansSerifFonts.test(fontFamily)) {
+                        mappedFont = 'Arial, sans-serif';
+                        fallbackCategory = 'sans-serif';
+                        this.warnings.push(`Font "${fontFamily}" not in Google Fonts, falling back to sans-serif`);
+                    } else {
+                        // Default fallback
+                        mappedFont = 'Arial, sans-serif';
+                        fallbackCategory = 'sans-serif';
+                        this.warnings.push(`Font "${fontFamily}" category unknown, falling back to sans-serif`);
+                    }
                 }
                 
-                // Categorize by font family type and return generic fallback
-                const sansSerifFonts = /sans|arial|helvetica|verdana|tahoma|trebuchet|calibri|segoe/i;
-                const serifFonts = /serif|times|georgia|garamond|palatino|century/i;
-                const monoFonts = /mono|courier|consolas|monaco/i;
-                
-                if (monoFonts.test(fontFamily)) {
-                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to monospace`);
-                    return 'monospace';
-                } else if (serifFonts.test(fontFamily)) {
-                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to serif`);
-                    return 'Georgia, serif';
-                } else if (sansSerifFonts.test(fontFamily)) {
-                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to sans-serif`);
-                    return 'Arial, sans-serif';
+                // Check if mapped font is in Google Fonts allowlist
+                if (this.googleFontsAllowlist.includes(mappedFont)) {
+                    fromGoogleFonts = true;
+                    if (!this.googleFontsUsed.includes(mappedFont)) {
+                        this.googleFontsUsed.push(mappedFont);
+                    }
                 }
                 
-                // Default fallback
-                console.log(`Font "${fontFamily}" category unknown, falling back to sans-serif`);
-                return 'Arial, sans-serif';
+                if (recordMapping) {
+                    this.fontMappings.push({
+                        original: fontFamily,
+                        mapped: mappedFont,
+                        fromGoogleFonts,
+                        fallbackCategory
+                    });
+                }
+                
+                return mappedFont;
+            }
+            
+            // FIX 5: Generate Google Fonts link tag
+            getGoogleFontsLink() {
+                if (this.googleFontsUsed.length === 0) {
+                    return '';
+                }
+                
+                const fontParams = this.googleFontsUsed.map(font => 
+                    'family=' + font.replace(/ /g, '+')
+                ).join('&');
+                
+                return `<link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?${fontParams}&display=swap" rel="stylesheet">`;
             }
 
+            // FIX 4: Generate CSS with theme-derived colors only
             generateCSS() {
                 const c = this.colors;
-                const headingFont = this.mapFontToWebSafe(this.fonts.heading);
-                const bodyFont = this.mapFontToWebSafe(this.fonts.body);
+                const headingFont = this.mapFontToWebSafe(this.fonts.heading, true);
+                const bodyFont = this.mapFontToWebSafe(this.fonts.body, true);
+                
+                // Compute paragraph/subtitle colors from theme foreground (not hardcoded)
+                const foregroundRgb = this.hexToRgb(c.foreground);
+                const paragraphColor = c.foreground;
+                const subtitleColor = this.adjustOpacity(c.foreground, 0.7);
                 
                 return `
                     :root {
@@ -758,7 +995,7 @@
                         font-weight: 700;
                         line-height: 1.2;
                         margin-bottom: 1.5rem;
-                        background: linear-gradient(135deg, var(--primary), #fff, var(--secondary));
+                        background: linear-gradient(135deg, var(--primary), var(--secondary));
                         -webkit-background-clip: text;
                         -webkit-text-fill-color: transparent;
                         background-clip: text;
@@ -768,23 +1005,25 @@
                         font-size: clamp(2rem, 5vw, 3.5rem);
                         font-weight: 700;
                         margin-bottom: 2rem;
+                        color: var(--foreground);
                     }
 
                     h3 {
                         font-size: 1.5rem;
                         font-weight: 600;
                         margin-bottom: 1rem;
+                        color: var(--foreground);
                     }
 
                     p {
                         font-size: 1.1rem;
-                        color: rgba(255, 255, 255, 0.8);
+                        color: ${paragraphColor};
                         margin-bottom: 1rem;
                     }
 
                     .subtitle {
                         font-size: 1.3rem;
-                        color: rgba(255, 255, 255, 0.6);
+                        color: ${subtitleColor};
                         font-weight: 300;
                     }
 
@@ -797,16 +1036,6 @@
                         object-fit: cover;
                         opacity: 0.3;
                         z-index: 1;
-                    }
-
-                    .overlay {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        background: linear-gradient(135deg, rgba(26, 10, 46, 0.8), rgba(26, 10, 46, 0.6));
-                        z-index: 2;
                     }
 
                     #hero {
@@ -861,14 +1090,20 @@
                         aspect-ratio: 1;
                         border-radius: 2rem;
                         overflow: hidden;
-                        border: 1px solid rgba(255, 255, 255, 0.1);
-                        box-shadow: 0 20px 60px rgba(168, 85, 247, 0.2);
+                        border: 1px solid ${this.adjustOpacity(c.foreground, 0.1)};
+                        box-shadow: 0 20px 60px ${this.adjustOpacity(c.primary, 0.2)};
                     }
 
                     .product-image img {
                         width: 100%;
                         height: 100%;
                         object-fit: cover;
+                    }
+                    
+                    .content-image {
+                        max-width: 100%;
+                        margin: 1rem 0;
+                        border-radius: 0.5rem;
                     }
 
                     .fade-in {
@@ -915,13 +1150,29 @@
 
                     footer {
                         padding: 2rem;
-                        border-top: 1px solid rgba(255, 255, 255, 0.1);
-                        background: rgba(255, 255, 255, 0.02);
+                        border-top: 1px solid ${this.adjustOpacity(c.foreground, 0.1)};
+                        background: ${this.adjustOpacity(c.foreground, 0.02)};
                         text-align: center;
-                        color: rgba(255, 255, 255, 0.5);
+                        color: ${this.adjustOpacity(c.foreground, 0.5)};
                         font-size: 0.9rem;
                     }
                 `;
+            }
+            
+            // Helper to convert hex to RGB
+            hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : { r: 255, g: 255, b: 255 };
+            }
+            
+            // Helper to adjust opacity of a color
+            adjustOpacity(color, opacity) {
+                const rgb = this.hexToRgb(color);
+                return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
             }
 
             lighten(color, percent) {
@@ -965,22 +1216,50 @@
                     if (slideXml) {
                         const slide = parseSlideXML(slideXml, relsXml, i, theme);
                         slides.push(slide);
+                    } else {
+                        console.warn(`Warning: Slide ${i} XML not found`);
+                        theme.warnings.push(`Slide ${i} XML not found`);
                     }
                 }
 
                 // Extract media with relationship mapping
                 const assets = {};
+                const expectedAssets = new Set();
+                
+                // Collect all expected assets from slides
+                slides.forEach(slide => {
+                    slide.images?.forEach(img => {
+                        if (img.name) {
+                            expectedAssets.add(img.name);
+                        }
+                    });
+                });
+                
+                // Extract actual assets
                 for (const [name, file] of Object.entries(pptxData.files)) {
                     if (name.match(/ppt\/media\//)) {
                         const mediaName = name.split('/').pop();
-                        assets[mediaName] = await file.async('blob');
+                        try {
+                            assets[mediaName] = await file.async('blob');
+                        } catch (error) {
+                            console.warn(`Warning: Failed to extract asset ${mediaName}:`, error);
+                            theme.warnings.push(`Failed to extract asset: ${mediaName}`);
+                        }
                     }
                 }
+                
+                // Check for missing assets
+                expectedAssets.forEach(assetName => {
+                    if (!assets[assetName]) {
+                        console.warn(`Warning: Expected asset not found: ${assetName}`);
+                        theme.warnings.push(`Expected asset not found: ${assetName}`);
+                    }
+                });
 
                 return { slides, assets, slideCount, mediaCount, theme };
             } catch (error) {
                 console.error('PPTX parsing error:', error);
-                throw new Error('Failed to parse PPTX file');
+                throw new Error('Failed to parse PPTX file: ' + error.message);
             }
         }
 
@@ -998,7 +1277,10 @@
                 fonts: {
                     heading: 'sans-serif',
                     body: 'sans-serif'
-                }
+                },
+                detectedFonts: new Set(),
+                warnings: [],
+                contrastAdjustments: []
             };
 
             try {
@@ -1022,17 +1304,28 @@
                     if (accent3) theme.colors.accent = '#' + accent3.getAttribute('val');
                     
                     // Ensure contrast for accessibility
-                    theme.colors = ensureAccessibleContrast(theme.colors);
+                    const contrastResult = ensureAccessibleContrast(theme.colors);
+                    theme.colors = contrastResult.colors;
+                    theme.contrastAdjustments = contrastResult.adjustments;
                     
                     // Extract fonts
                     const majorFont = doc.querySelector('a\\:majorFont a\\:latin');
                     const minorFont = doc.querySelector('a\\:minorFont a\\:latin');
                     
-                    if (majorFont) theme.fonts.heading = majorFont.getAttribute('typeface');
-                    if (minorFont) theme.fonts.body = minorFont.getAttribute('typeface');
+                    if (majorFont) {
+                        theme.fonts.heading = majorFont.getAttribute('typeface');
+                        theme.detectedFonts.add(majorFont.getAttribute('typeface'));
+                    }
+                    if (minorFont) {
+                        theme.fonts.body = minorFont.getAttribute('typeface');
+                        theme.detectedFonts.add(minorFont.getAttribute('typeface'));
+                    }
+                } else {
+                    theme.warnings.push('Theme file not found, using default theme');
                 }
             } catch (error) {
                 console.warn('Theme extraction failed, using defaults:', error);
+                theme.warnings.push(`Theme extraction failed: ${error.message}`);
             }
 
             return theme;
@@ -1040,6 +1333,8 @@
 
         // Ensure accessible contrast between colors
         function ensureAccessibleContrast(colors) {
+            const adjustments = [];
+            
             // Calculate relative luminance
             function getLuminance(hex) {
                 const rgb = parseInt(hex.slice(1), 16);
@@ -1063,7 +1358,9 @@
             }
             
             // Ensure minimum 4.5:1 contrast ratio for text
+            const originalForeground = colors.foreground;
             const contrast = getContrast(colors.background, colors.foreground);
+            
             if (contrast < 4.5) {
                 // If contrast is too low, force high contrast colors
                 const bgLum = getLuminance(colors.background);
@@ -1072,9 +1369,16 @@
                 } else {
                     colors.foreground = '#1a1a1a'; // Dark text on light bg
                 }
+                
+                adjustments.push({
+                    type: 'contrast',
+                    original: originalForeground,
+                    adjusted: colors.foreground,
+                    reason: `Contrast ratio ${contrast.toFixed(2)}:1 was below 4.5:1 threshold`
+                });
             }
             
-            return colors;
+            return { colors, adjustments };
         }
 
         // Convert EMU (English Metric Units) to pixels
@@ -1146,6 +1450,10 @@
                             const latin = rPr.querySelector('a\\:latin');
                             if (latin) {
                                 fontFamily = latin.getAttribute('typeface') || fontFamily;
+                                // Track detected font
+                                if (fontFamily && fontFamily !== '+mn-lt' && fontFamily !== '+mj-lt') {
+                                    theme.detectedFonts.add(fontFamily);
+                                }
                             }
                         }
 
@@ -1188,13 +1496,19 @@
                         }
                     }
                     
-                    const fileName = relationships.get(rId) || `slide-${slideNum}-image-${images.length}.jpg`;
+                    const fileName = relationships.get(rId);
                     
-                    images.push({
-                        name: fileName,
-                        rId,
-                        geometry
-                    });
+                    if (fileName) {
+                        images.push({
+                            name: fileName,
+                            rId,
+                            geometry
+                        });
+                    } else {
+                        // Warning: missing relationship target
+                        console.warn(`Warning: Image relationship ${rId} in slide ${slideNum} has no target file`);
+                        theme.warnings.push(`Slide ${slideNum}: Missing image file for relationship ${rId}`);
+                    }
                 }
             });
 
@@ -1262,19 +1576,19 @@
                 const classifications = hierarchy.analyzeSlides(currentPPTX.slides);
 
                 // Get design system from extracted PPTX theme
-                const designSystem = new DesignSystem(currentPPTX.theme);
+                const designSystem = new DesignSystem(currentPPTX.theme, Array.from(currentPPTX.theme.detectedFonts));
 
                 // Generate layouts
                 const layoutGen = new LayoutGenerator();
                 let sectionsHTML = '';
 
+                // FIX 4: Remove per-slide HSL gradients - use theme background only
                 classifications.forEach((classification, idx) => {
                     const slide = currentPPTX.slides[idx];
                     const layout = layoutGen.generateLayout(classification, slide, designSystem);
-                    const bgColor = `hsl(${(idx * 30) % 360}, 50%, ${idx % 2 === 0 ? 15 : 20}%)`;
 
                     sectionsHTML += `
-                        <section style="background: linear-gradient(135deg, ${bgColor} 0%, ${bgColor}dd 100%);">
+                        <section>
                             <div class="container">
                                 ${layout}
                             </div>
@@ -1282,9 +1596,12 @@
                     `;
                 });
 
-                // Generate HTML
+                // Generate HTML with Google Fonts link
                 const siteTitle = document.getElementById('siteTitle').value;
                 const copyright = document.getElementById('copyright').value;
+                
+                // FIX 5: Add Google Fonts link if needed
+                const googleFontsLink = designSystem.getGoogleFontsLink();
 
                 generatedHTML = `<!DOCTYPE html>
 <html lang="en">
@@ -1292,6 +1609,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${siteTitle}</title>
+    ${googleFontsLink}
     <style>
         ${designSystem.generateCSS()}
     </style>
@@ -1343,6 +1661,25 @@
 </body>
 </html>`;
 
+                // FIX 6: Generate accessibility report
+                generatedAccessibilityReport = generateAccessibilityReport(
+                    currentPPTX.theme,
+                    designSystem,
+                    hierarchy.warnings
+                );
+                
+                // Log all warnings to console
+                const allWarnings = [
+                    ...currentPPTX.theme.warnings,
+                    ...designSystem.warnings,
+                    ...hierarchy.warnings
+                ];
+                
+                if (allWarnings.length > 0) {
+                    console.warn('=== Conversion Warnings ===');
+                    allWarnings.forEach(w => console.warn(w));
+                }
+
                 // Show preview
                 const preview = document.getElementById('preview');
                 preview.srcdoc = generatedHTML;
@@ -1360,13 +1697,18 @@
 
             try {
                 const zip = new JSZip();
+                
+                // FIX 6: Add index.html
                 zip.file('index.html', generatedHTML);
 
-                // Add assets
+                // Add assets folder
                 const assetsFolder = zip.folder('assets');
                 for (const [name, blob] of Object.entries(currentPPTX.assets)) {
                     assetsFolder.file(name, blob);
                 }
+                
+                // FIX 6: Add ACCESSIBILITY_REPORT.txt
+                zip.file('ACCESSIBILITY_REPORT.txt', generatedAccessibilityReport);
 
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
                 const url = URL.createObjectURL(zipBlob);
@@ -1379,6 +1721,7 @@
                 URL.revokeObjectURL(url);
             } catch (error) {
                 console.error('Download error:', error);
+                showStatus('generateStatus', 'Download failed: ' + error.message, 'error');
             }
         });
 
