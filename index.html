@@ -262,7 +262,7 @@
     <div class="container">
         <header>
             <h1>PPTX → Scrollytelling</h1>
-            <p class="subtitle">Convert your PowerPoint deck into a beautiful scrollytelling website</p>
+            <p class="subtitle">Convert your PowerPoint deck into a scrollytelling website</p>
         </header>
 
         <div class="main-grid">
@@ -300,16 +300,6 @@
                 <div class="form-group">
                     <label>Copyright</label>
                     <input type="text" id="copyright" placeholder="© 2026 Your Company" value="© 2026 The Gaf NYC">
-                </div>
-                <div class="form-group">
-                    <label>Color Theme</label>
-                    <select id="themeSelect">
-                        <option value="auto">Auto-detect from deck</option>
-                        <option value="cyber">Cyber Futurism (Dark)</option>
-                        <option value="ocean">Ocean (Blue)</option>
-                        <option value="forest">Forest (Green)</option>
-                        <option value="sunset">Sunset (Orange)</option>
-                    </select>
                 </div>
 
                 <div class="button-group">
@@ -353,54 +343,96 @@
             }
 
             detectGlobalElements() {
-                // Track recurring text and images
+                // Track recurring text, images, and their positions
                 const textFrequency = new Map();
                 const imageFrequency = new Map();
+                const positionClusters = { top: [], bottom: [], left: [], right: [] };
 
                 this.slides.forEach((slide, idx) => {
-                    // Track text
+                    // Track text with position awareness
                     slide.textRuns?.forEach(run => {
                         const key = run.text.substring(0, 50);
                         textFrequency.set(key, (textFrequency.get(key) || 0) + 1);
+                        
+                        // Track position for chrome detection (logos, headers, footers)
+                        if (run.geometry) {
+                            // Top 10% of slide (headers/logos)
+                            if (run.geometry.y < 100) {
+                                positionClusters.top.push({ type: 'text', key, slideIdx: idx });
+                            }
+                            // Bottom 10% of slide (footers)
+                            if (run.geometry.y > 600) {
+                                positionClusters.bottom.push({ type: 'text', key, slideIdx: idx });
+                            }
+                        }
                     });
 
-                    // Track images
+                    // Track images with position awareness
                     slide.images?.forEach(img => {
                         imageFrequency.set(img.name, (imageFrequency.get(img.name) || 0) + 1);
+                        
+                        // Track position for chrome detection
+                        if (img.geometry) {
+                            if (img.geometry.y < 100) {
+                                positionClusters.top.push({ type: 'image', key: img.name, slideIdx: idx });
+                            }
+                            if (img.geometry.y > 600) {
+                                positionClusters.bottom.push({ type: 'image', key: img.name, slideIdx: idx });
+                            }
+                            if (img.geometry.x < 100) {
+                                positionClusters.left.push({ type: 'image', key: img.name, slideIdx: idx });
+                            }
+                            if (img.geometry.x > 900) {
+                                positionClusters.right.push({ type: 'image', key: img.name, slideIdx: idx });
+                            }
+                        }
                     });
                 });
 
-                // Mark recurring elements as global (80%+ of slides)
+                // Mark recurring elements as global (appears in 80%+ of slides)
                 const threshold = Math.ceil(this.slides.length * 0.8);
                 textFrequency.forEach((count, text) => {
                     if (count >= threshold) {
-                        this.globalElements.set(`text:${text}`, { type: 'text', count });
+                        this.globalElements.set(`text:${text}`, { type: 'text', count, isChrome: true });
                     }
                 });
                 imageFrequency.forEach((count, name) => {
                     if (count >= threshold) {
-                        this.globalElements.set(`image:${name}`, { type: 'image', count });
+                        this.globalElements.set(`image:${name}`, { type: 'image', count, isChrome: true });
                     }
                 });
             }
 
             scoreElements() {
                 this.slides.forEach(slide => {
-                    // Score text runs
+                    // Score text runs with real geometry and font data
                     slide.textRuns?.forEach(run => {
-                        const size = run.fontSize || 12;
+                        // Defensive guard: ensure geometry exists
+                        if (!run.geometry) {
+                            run.geometry = { x: 0, y: 0, width: 100, height: 20 };
+                        }
+                        
+                        const size = run.fontSize || 18;
+                        const area = (run.geometry.width * run.geometry.height) / 10000; // Normalized area
                         const isBold = run.bold ? 1 : 0;
                         const isUnique = !this.globalElements.has(`text:${run.text.substring(0, 50)}`) ? 1 : 0;
                         
-                        run.salience = (size / 72) * 0.4 + isBold * 0.3 + isUnique * 0.3;
+                        // Salience based on: font size (40%), area (30%), bold (15%), uniqueness (15%)
+                        run.salience = (size / 72) * 0.4 + Math.min(area, 1) * 0.3 + isBold * 0.15 + isUnique * 0.15;
                     });
 
-                    // Score images
+                    // Score images with real geometry
                     slide.images?.forEach(img => {
-                        const isUnique = !this.globalElements.has(`image:${img.name}`) ? 1 : 0;
-                        const size = (img.width * img.height) / 1000000;
+                        // Defensive guard: ensure geometry exists
+                        if (!img.geometry) {
+                            img.geometry = { x: 0, y: 0, width: 400, height: 300 };
+                        }
                         
-                        img.salience = Math.min(size * 0.6, 1) * 0.7 + isUnique * 0.3;
+                        const isUnique = !this.globalElements.has(`image:${img.name}`) ? 1 : 0;
+                        const area = (img.geometry.width * img.geometry.height) / 1000000; // Normalized area
+                        
+                        // Salience based on: area (70%), uniqueness (30%)
+                        img.salience = Math.min(area * 0.7, 0.7) + isUnique * 0.3;
                     });
                 });
             }
@@ -595,51 +627,65 @@
         // DESIGN SYSTEM
         // ============================================
         class DesignSystem {
-            constructor(theme = 'cyber') {
-                this.theme = theme;
-                this.colors = this.getThemeColors(theme);
+            constructor(themeData) {
+                // Use PPTX-extracted theme data only
+                this.colors = themeData.colors;
+                this.fonts = themeData.fonts;
             }
 
-            getThemeColors(theme) {
-                const themes = {
-                    cyber: {
-                        background: '#1a0a2e',
-                        foreground: '#f5f5f5',
-                        primary: '#00d9ff',
-                        secondary: '#a855f7',
-                        accent: '#ff006e',
-                        muted: '#666'
-                    },
-                    ocean: {
-                        background: '#0a1628',
-                        foreground: '#e8f4f8',
-                        primary: '#0ea5e9',
-                        secondary: '#06b6d4',
-                        accent: '#0284c7',
-                        muted: '#64748b'
-                    },
-                    forest: {
-                        background: '#0f2818',
-                        foreground: '#f0fdf4',
-                        primary: '#22c55e',
-                        secondary: '#10b981',
-                        accent: '#059669',
-                        muted: '#6b7280'
-                    },
-                    sunset: {
-                        background: '#2a1810',
-                        foreground: '#fef3c7',
-                        primary: '#f97316',
-                        secondary: '#ea580c',
-                        accent: '#dc2626',
-                        muted: '#9ca3af'
-                    }
+            // Map PPTX font to Google Fonts with category-based fallback
+            mapFontToWebSafe(fontFamily) {
+                // Common Google Fonts mapping for known Office fonts
+                const fontMap = {
+                    'Calibri': 'Roboto',
+                    'Arial': 'Arial',
+                    'Times New Roman': 'Georgia',
+                    'Courier New': 'Courier New',
+                    'Verdana': 'Verdana',
+                    'Georgia': 'Georgia',
+                    'Palatino': 'Palatino',
+                    'Garamond': 'Garamond',
+                    'Comic Sans MS': 'Comic Sans MS',
+                    'Trebuchet MS': 'Trebuchet MS',
+                    'Impact': 'Impact',
+                    'Tahoma': 'Tahoma',
+                    'Century Gothic': 'Century Gothic',
+                    'Lucida Sans': 'Lucida Sans',
+                    'Helvetica': 'Helvetica',
+                    'Franklin Gothic': 'Franklin Gothic Medium'
                 };
-                return themes[theme] || themes.cyber;
+                
+                // Check if font is directly available
+                if (fontMap[fontFamily]) {
+                    return fontMap[fontFamily];
+                }
+                
+                // Categorize by font family type and return generic fallback
+                const sansSerifFonts = /sans|arial|helvetica|verdana|tahoma|trebuchet|calibri|segoe/i;
+                const serifFonts = /serif|times|georgia|garamond|palatino|century/i;
+                const monoFonts = /mono|courier|consolas|monaco/i;
+                
+                if (monoFonts.test(fontFamily)) {
+                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to monospace`);
+                    return 'monospace';
+                } else if (serifFonts.test(fontFamily)) {
+                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to serif`);
+                    return 'Georgia, serif';
+                } else if (sansSerifFonts.test(fontFamily)) {
+                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to sans-serif`);
+                    return 'Arial, sans-serif';
+                }
+                
+                // Default fallback
+                console.log(`Font "${fontFamily}" category unknown, falling back to sans-serif`);
+                return 'Arial, sans-serif';
             }
 
             generateCSS() {
                 const c = this.colors;
+                const headingFont = this.mapFontToWebSafe(this.fonts.heading);
+                const bodyFont = this.mapFontToWebSafe(this.fonts.body);
+                
                 return `
                     :root {
                         --background: ${c.background};
@@ -661,7 +707,7 @@
                     }
 
                     body {
-                        font-family: 'Titillium Web', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        font-family: ${bodyFont};
                         background-color: var(--background);
                         color: var(--foreground);
                         line-height: 1.6;
@@ -701,6 +747,10 @@
                         width: 100%;
                         position: relative;
                         z-index: 10;
+                    }
+
+                    h1, h2, h3 {
+                        font-family: ${headingFont};
                     }
 
                     h1 {
@@ -904,17 +954,21 @@
                     .filter(name => name.match(/ppt\/media\//))
                     .length;
 
+                // Extract theme colors and fonts
+                const theme = await extractTheme(pptxData);
+
                 // Extract slides
                 const slides = [];
                 for (let i = 1; i <= slideCount; i++) {
                     const slideXml = await pptxData.file(`ppt/slides/slide${i}.xml`)?.async('string');
+                    const relsXml = await pptxData.file(`ppt/slides/_rels/slide${i}.xml.rels`)?.async('string');
                     if (slideXml) {
-                        const slide = parseSlideXML(slideXml, i);
+                        const slide = parseSlideXML(slideXml, relsXml, i, theme);
                         slides.push(slide);
                     }
                 }
 
-                // Extract media
+                // Extract media with relationship mapping
                 const assets = {};
                 for (const [name, file] of Object.entries(pptxData.files)) {
                     if (name.match(/ppt\/media\//)) {
@@ -923,39 +977,223 @@
                     }
                 }
 
-                return { slides, assets, slideCount, mediaCount };
+                return { slides, assets, slideCount, mediaCount, theme };
             } catch (error) {
                 console.error('PPTX parsing error:', error);
                 throw new Error('Failed to parse PPTX file');
             }
         }
 
-        function parseSlideXML(xml, slideNum) {
+        // Extract theme colors and fonts from PPTX
+        async function extractTheme(pptxData) {
+            const theme = {
+                colors: {
+                    background: '#1a1a2e',
+                    foreground: '#f5f5f5',
+                    primary: '#4a90e2',
+                    secondary: '#7b68ee',
+                    accent: '#ff6b6b',
+                    muted: '#888888'
+                },
+                fonts: {
+                    heading: 'sans-serif',
+                    body: 'sans-serif'
+                }
+            };
+
+            try {
+                // Parse theme1.xml for colors
+                const themeXml = await pptxData.file('ppt/theme/theme1.xml')?.async('string');
+                if (themeXml) {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(themeXml, 'text/xml');
+                    
+                    // Extract colors from color scheme
+                    const dk1 = doc.querySelector('a\\:dk1 a\\:srgbClr');
+                    const lt1 = doc.querySelector('a\\:lt1 a\\:srgbClr');
+                    const accent1 = doc.querySelector('a\\:accent1 a\\:srgbClr');
+                    const accent2 = doc.querySelector('a\\:accent2 a\\:srgbClr');
+                    const accent3 = doc.querySelector('a\\:accent3 a\\:srgbClr');
+                    
+                    if (dk1) theme.colors.background = '#' + dk1.getAttribute('val');
+                    if (lt1) theme.colors.foreground = '#' + lt1.getAttribute('val');
+                    if (accent1) theme.colors.primary = '#' + accent1.getAttribute('val');
+                    if (accent2) theme.colors.secondary = '#' + accent2.getAttribute('val');
+                    if (accent3) theme.colors.accent = '#' + accent3.getAttribute('val');
+                    
+                    // Ensure contrast for accessibility
+                    theme.colors = ensureAccessibleContrast(theme.colors);
+                    
+                    // Extract fonts
+                    const majorFont = doc.querySelector('a\\:majorFont a\\:latin');
+                    const minorFont = doc.querySelector('a\\:minorFont a\\:latin');
+                    
+                    if (majorFont) theme.fonts.heading = majorFont.getAttribute('typeface');
+                    if (minorFont) theme.fonts.body = minorFont.getAttribute('typeface');
+                }
+            } catch (error) {
+                console.warn('Theme extraction failed, using defaults:', error);
+            }
+
+            return theme;
+        }
+
+        // Ensure accessible contrast between colors
+        function ensureAccessibleContrast(colors) {
+            // Calculate relative luminance
+            function getLuminance(hex) {
+                const rgb = parseInt(hex.slice(1), 16);
+                const r = (rgb >> 16) / 255;
+                const g = ((rgb >> 8) & 0xff) / 255;
+                const b = (rgb & 0xff) / 255;
+                
+                const rsRGB = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+                const gsRGB = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+                const bsRGB = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+                
+                return 0.2126 * rsRGB + 0.7152 * gsRGB + 0.0722 * bsRGB;
+            }
+            
+            function getContrast(color1, color2) {
+                const l1 = getLuminance(color1);
+                const l2 = getLuminance(color2);
+                const lighter = Math.max(l1, l2);
+                const darker = Math.min(l1, l2);
+                return (lighter + 0.05) / (darker + 0.05);
+            }
+            
+            // Ensure minimum 4.5:1 contrast ratio for text
+            const contrast = getContrast(colors.background, colors.foreground);
+            if (contrast < 4.5) {
+                // If contrast is too low, force high contrast colors
+                const bgLum = getLuminance(colors.background);
+                if (bgLum < 0.5) {
+                    colors.foreground = '#f5f5f5'; // Light text on dark bg
+                } else {
+                    colors.foreground = '#1a1a1a'; // Dark text on light bg
+                }
+            }
+            
+            return colors;
+        }
+
+        // Convert EMU (English Metric Units) to pixels
+        function emuToPx(emu) {
+            return emu / 914400 * 96; // 914400 EMUs per inch, 96 DPI
+        }
+
+        // Parse slide XML with geometry extraction
+        function parseSlideXML(xml, relsXml, slideNum, theme) {
             const parser = new DOMParser();
             const doc = parser.parseFromString(xml, 'text/xml');
+            
+            // Parse relationships to map rId to actual file names
+            const relationships = new Map();
+            if (relsXml) {
+                const relsDoc = parser.parseFromString(relsXml, 'text/xml');
+                relsDoc.querySelectorAll('Relationship').forEach(rel => {
+                    const id = rel.getAttribute('Id');
+                    const target = rel.getAttribute('Target');
+                    if (id && target) {
+                        const fileName = target.split('/').pop();
+                        relationships.set(id, fileName);
+                    }
+                });
+            }
 
             const textRuns = [];
             const images = [];
 
-            // Extract text
-            doc.querySelectorAll('a\\:t').forEach(el => {
-                const text = el.textContent?.trim();
-                if (text) {
-                    textRuns.push({
-                        text,
-                        fontSize: 12,
-                        bold: false
-                    });
+            // Extract text with geometry and styling
+            doc.querySelectorAll('p\\:sp').forEach(shape => {
+                // Get transform/geometry
+                const xfrm = shape.querySelector('a\\:xfrm');
+                let geometry = null;
+                if (xfrm) {
+                    const off = xfrm.querySelector('a\\:off');
+                    const ext = xfrm.querySelector('a\\:ext');
+                    if (off && ext) {
+                        geometry = {
+                            x: parseFloat(off.getAttribute('x')) || 0,
+                            y: parseFloat(off.getAttribute('y')) || 0,
+                            width: parseFloat(ext.getAttribute('cx')) || 0,
+                            height: parseFloat(ext.getAttribute('cy')) || 0
+                        };
+                        // Convert EMU to pixels
+                        geometry.x = emuToPx(geometry.x);
+                        geometry.y = emuToPx(geometry.y);
+                        geometry.width = emuToPx(geometry.width);
+                        geometry.height = emuToPx(geometry.height);
+                    }
                 }
+
+                // Extract text runs within this shape
+                shape.querySelectorAll('a\\:t').forEach(el => {
+                    const text = el.textContent?.trim();
+                    if (text) {
+                        // Find font size
+                        const rPr = el.parentElement?.querySelector('a\\:rPr');
+                        let fontSize = 18; // Default
+                        let bold = false;
+                        let fontFamily = theme.fonts.body;
+                        
+                        if (rPr) {
+                            const sz = rPr.getAttribute('sz');
+                            if (sz) fontSize = parseInt(sz) / 100; // Size is in 100ths of a point
+                            bold = rPr.getAttribute('b') === '1';
+                            
+                            // Extract font family
+                            const latin = rPr.querySelector('a\\:latin');
+                            if (latin) {
+                                fontFamily = latin.getAttribute('typeface') || fontFamily;
+                            }
+                        }
+
+                        textRuns.push({
+                            text,
+                            fontSize,
+                            bold,
+                            fontFamily,
+                            geometry: geometry || { x: 0, y: 0, width: 100, height: 20 }
+                        });
+                    }
+                });
             });
 
-            // Extract images
-            doc.querySelectorAll('p\\:cSld a\\:blip').forEach(el => {
-                const rId = el.getAttribute('r:embed');
+            // Extract images with geometry
+            doc.querySelectorAll('p\\:pic').forEach(pic => {
+                const blip = pic.querySelector('a\\:blip');
+                const rId = blip?.getAttribute('r:embed');
+                
                 if (rId) {
+                    // Get transform/geometry
+                    const xfrm = pic.querySelector('a\\:xfrm');
+                    let geometry = { x: 0, y: 0, width: 400, height: 300 };
+                    
+                    if (xfrm) {
+                        const off = xfrm.querySelector('a\\:off');
+                        const ext = xfrm.querySelector('a\\:ext');
+                        if (off && ext) {
+                            geometry = {
+                                x: parseFloat(off.getAttribute('x')) || 0,
+                                y: parseFloat(off.getAttribute('y')) || 0,
+                                width: parseFloat(ext.getAttribute('cx')) || 0,
+                                height: parseFloat(ext.getAttribute('cy')) || 0
+                            };
+                            // Convert EMU to pixels
+                            geometry.x = emuToPx(geometry.x);
+                            geometry.y = emuToPx(geometry.y);
+                            geometry.width = emuToPx(geometry.width);
+                            geometry.height = emuToPx(geometry.height);
+                        }
+                    }
+                    
+                    const fileName = relationships.get(rId) || `slide-${slideNum}-image-${images.length}.jpg`;
+                    
                     images.push({
-                        name: `slide-${slideNum}-image-${images.length}.jpg`,
-                        rId
+                        name: fileName,
+                        rId,
+                        geometry
                     });
                 }
             });
@@ -1023,9 +1261,8 @@
                 const hierarchy = new HierarchyEngine();
                 const classifications = hierarchy.analyzeSlides(currentPPTX.slides);
 
-                // Get design system
-                const theme = document.getElementById('themeSelect').value === 'auto' ? 'cyber' : document.getElementById('themeSelect').value;
-                const designSystem = new DesignSystem(theme);
+                // Get design system from extracted PPTX theme
+                const designSystem = new DesignSystem(currentPPTX.theme);
 
                 // Generate layouts
                 const layoutGen = new LayoutGenerator();
@@ -1055,9 +1292,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${siteTitle}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         ${designSystem.generateCSS()}
     </style>
