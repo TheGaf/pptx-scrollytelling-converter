@@ -523,7 +523,7 @@
             imageLayout(slide, primary, secondary, ds) {
                 let html = '<div class="product-grid">';
                 
-                if (primary && primary.data) {
+                if (primary && primary.name) {
                     html += `<div class="product-image"><img src="assets/${primary.name}" alt="Product" /></div>`;
                 }
 
@@ -584,7 +584,7 @@
             balancedLayout(slide, primary, secondary, ds) {
                 let html = '<div class="product-grid">';
 
-                if (primary && primary.data) {
+                if (primary && primary.name) {
                     html += `<div class="product-image"><img src="assets/${primary.name}" alt="Content" /></div>`;
                 }
 
