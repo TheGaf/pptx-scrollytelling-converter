@@ -3,520 +3,1160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="PPTX to Scrollytelling - Convert PowerPoint to bespoke scrollytelling sites">
     <title>PPTX to Scrollytelling Converter</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
-            color: #1a1a1a;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            color: #f5f5f5;
+            line-height: 1.6;
             min-height: 100vh;
             padding: 2rem;
-            line-height: 1.6;
         }
-        .skip-link { position: absolute; top: -40px; left: 0; background: #000; color: #fff; padding: 8px; z-index: 100; }
-        .skip-link:focus { top: 0; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        header { text-align: center; margin-bottom: 3rem; }
-        h1 { font-size: 2.5rem; margin-bottom: 0.5rem; color: #1a1a1a; }
-        .subtitle { color: #666; font-size: 1.1rem; margin-bottom: 2rem; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
-        .box { padding: 2rem; border-radius: 0.75rem; background: #fff; border: 1px solid #ddd; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .box h2 { font-size: 1.2rem; margin-bottom: 1.5rem; color: #1a1a1a; }
-        label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; color: #333; }
-        input[type="text"], input[type="file"] {
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #00d9ff, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1rem;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .panel h2 {
+            font-size: 1.3rem;
+            margin-bottom: 1.5rem;
+            color: #00d9ff;
+        }
+
+        .upload-zone {
+            border: 2px dashed rgba(0, 217, 255, 0.3);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(0, 217, 255, 0.05);
+        }
+
+        .upload-zone:hover {
+            border-color: rgba(0, 217, 255, 0.6);
+            background: rgba(0, 217, 255, 0.1);
+        }
+
+        .upload-zone.active {
+            border-color: #00d9ff;
+            background: rgba(0, 217, 255, 0.15);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        input[type="text"],
+        select {
             width: 100%;
             padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 0.5rem;
-            border: 2px solid #ddd;
-            background: #fff;
-            color: #1a1a1a;
-            font-family: inherit;
-            font-size: 0.95rem;
-            transition: border-color 0.2s;
+            color: #f5f5f5;
+            font-size: 1rem;
+            transition: all 0.3s ease;
         }
-        input[type="text"]:focus, input[type="file"]:focus { outline: none; border-color: #0066cc; box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1); }
-        .drop-zone { border: 2px dashed #999; border-radius: 0.75rem; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s; background: #fafafa; }
-        .drop-zone:hover { border-color: #0066cc; background: #f0f5ff; }
-        .drop-zone.over { border-color: #0066cc; background: #e6f0ff; }
-        .drop-zone p { margin: 0.5rem 0; color: #666; }
-        input[type="file"] { display: none; }
-        .file-info, .msg { margin-top: 1rem; padding: 0.75rem; border-radius: 0.5rem; border-left: 4px solid; display: none; font-size: 0.9rem; }
-        .file-info.show, .msg.show { display: block; }
-        .file-info { background: #e6f9e6; border-color: #22c55e; color: #166534; }
-        .msg.ok { background: #e6f9e6; border-color: #22c55e; color: #166534; }
-        .msg.err { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
-        .msg.warn { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
-        .msg.info { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
-        .buttons { display: flex; gap: 1rem; margin-top: 2rem; }
-        button { flex: 1; padding: 1rem; border: none; border-radius: 0.5rem; font-family: inherit; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-        button:focus { outline: 2px solid #0066cc; outline-offset: 2px; }
-        .btn-main { background: #0066cc; color: #fff; }
-        .btn-main:hover:not(:disabled) { background: #0052a3; }
-        .btn-main:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-sec { background: #f0f0f0; color: #1a1a1a; border: 1px solid #ddd; }
-        .btn-sec:hover { background: #e8e8e8; }
-        .loading { display: none; text-align: center; padding: 2rem; }
-        .loading.show { display: block; }
-        .spinner { border: 4px solid #f0f0f0; border-top: 4px solid #0066cc; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .summary { padding: 1rem; background: #f0f5ff; border-radius: 0.5rem; border-left: 4px solid #3b82f6; margin-top: 1rem; display: none; }
-        .summary.show { display: block; }
-        .summary h3 { color: #1e40af; margin-bottom: 0.5rem; font-size: 1rem; }
-        .summary-item { font-size: 0.9rem; margin-bottom: 0.25rem; color: #1e40af; }
-        .preview { display: none; margin-top: 2rem; padding: 2rem; background: #fff; border-radius: 0.75rem; border: 1px solid #ddd; }
-        .preview.show { display: block; }
-        .preview h3 { margin-bottom: 1rem; color: #1a1a1a; }
-        .preview-iframe { width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 0.5rem; background: #fff; }
-        @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } h1 { font-size: 1.8rem; } .preview-iframe { height: 400px; } }
+
+        input[type="text"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #00d9ff;
+            background: rgba(0, 217, 255, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        button {
+            flex: 1;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00d9ff, #a855f7);
+            color: #000;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 217, 255, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #f5f5f5;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.info {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+            color: #93c5fd;
+        }
+
+        .status.success {
+            background: rgba(34, 197, 94, 0.1);
+            border-left: 3px solid #22c55e;
+            color: #bbf7d0;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 3px solid #ef4444;
+            color: #fca5a5;
+        }
+
+        .preview-container {
+            display: none;
+            margin-top: 2rem;
+        }
+
+        .preview-container.show {
+            display: block;
+        }
+
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            background: white;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 3px solid #00d9ff;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #00d9ff;
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .panel {
+                padding: 1.5rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <a href="#main" class="skip-link">Skip to main content</a>
-
     <div class="container">
         <header>
-            <h1>PPTX to Scrollytelling</h1>
-            <p class="subtitle">Transform your PowerPoint presentations into bespoke, responsive scrollytelling websites. Each conversion is unique to your deck's design.</p>
+            <h1>PPTX → Scrollytelling</h1>
+            <p class="subtitle">Convert your PowerPoint deck into a beautiful scrollytelling website</p>
         </header>
 
-        <main id="main">
-            <div class="grid">
-                <div class="box">
-                    <h2>Upload PPTX</h2>
-                    <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Drop PPTX file here or click to browse">
-                        <p style="font-size: 2rem; margin-bottom: 0.5rem;">📤</p>
-                        <p><strong>Drag & drop PPTX here</strong></p>
-                        <p style="color: #999; font-size: 0.9rem;">or click to browse</p>
-                        <input type="file" id="fileInput" accept=".pptx" aria-label="Select PPTX file">
-                    </div>
-                    <div class="file-info" id="fileInfo"></div>
-                    <div class="msg" id="uploadStatus" role="status" aria-live="polite" aria-atomic="true"></div>
+        <div class="main-grid">
+            <!-- Upload Panel -->
+            <div class="panel">
+                <h2>📤 Upload Deck</h2>
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">📎</div>
+                    <p><strong>Drag & drop your PPTX</strong></p>
+                    <p style="color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; margin-top: 0.5rem;">or click to browse</p>
                 </div>
+                <input type="file" id="fileInput" accept=".pptx" />
 
-                <div class="box">
-                    <h2>Design Analysis</h2>
-                    <div class="summary" id="summary" role="region" aria-label="Design analysis">
-                        <div id="summaryContent"></div>
+                <div id="uploadStatus" class="status"></div>
+
+                <div class="stats" id="stats" style="display: none;">
+                    <div class="stat-item">
+                        <div class="stat-label">Slides</div>
+                        <div class="stat-value" id="slideCount">0</div>
                     </div>
-                    <div style="padding: 1rem; background: #f0f5ff; border-radius: 0.5rem; border-left: 4px solid #3b82f6; color: #1e40af; font-size: 0.9rem; margin-top: 1rem;">
-                        <strong>✨ Bespoke Design:</strong> The converter analyzes your deck's unique fonts, colors, layouts, and visual hierarchy to create a custom scrollytelling site.
+                    <div class="stat-item">
+                        <div class="stat-label">Images</div>
+                        <div class="stat-value" id="imageCount">0</div>
                     </div>
-                </div>
-            </div>
-
-            <div id="loading" class="loading" role="status" aria-live="polite" aria-atomic="true">
-                <div class="spinner"></div>
-                <p id="loadingText">Analyzing your presentation...</p>
-            </div>
-
-            <div class="preview" id="preview" role="region" aria-label="Generated site preview">
-                <h3>Preview</h3>
-                <iframe id="previewIframe" class="preview-iframe" title="Preview of generated scrollytelling site" sandbox="allow-same-origin"></iframe>
-                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
-                    <button class="btn-sec" id="editBtn">← Edit & Regenerate</button>
-                    <button class="btn-main" id="downloadBtn">✓ Download ZIP</button>
                 </div>
             </div>
 
-            <div class="buttons">
-                <button class="btn-main" id="generateBtn" disabled aria-label="Generate preview from uploaded PPTX">Generate Preview</button>
-                <button class="btn-sec" id="resetBtn" aria-label="Reset form and clear all inputs">Reset</button>
+            <!-- Settings Panel -->
+            <div class="panel">
+                <h2>⚙️ Customize</h2>
+                <div class="form-group">
+                    <label>Site Title</label>
+                    <input type="text" id="siteTitle" placeholder="Enter site title" value="Driving Meaningful Health Change">
+                </div>
+                <div class="form-group">
+                    <label>Copyright</label>
+                    <input type="text" id="copyright" placeholder="© 2026 Your Company" value="© 2026 The Gaf NYC">
+                </div>
+                <div class="form-group">
+                    <label>Color Theme</label>
+                    <select id="themeSelect">
+                        <option value="auto">Auto-detect from deck</option>
+                        <option value="cyber">Cyber Futurism (Dark)</option>
+                        <option value="ocean">Ocean (Blue)</option>
+                        <option value="forest">Forest (Green)</option>
+                        <option value="sunset">Sunset (Orange)</option>
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-primary" id="generateBtn" disabled>Generate Preview</button>
+                    <button class="btn-secondary" id="resetBtn">Reset</button>
+                </div>
+
+                <div id="generateStatus" class="status"></div>
             </div>
-        </main>
+        </div>
+
+        <!-- Preview Section -->
+        <div class="preview-container" id="previewContainer">
+            <h2 style="margin-bottom: 1rem; color: #00d9ff;">👁️ Preview</h2>
+            <iframe id="preview" sandbox="allow-same-origin"></iframe>
+            <div class="button-group" style="margin-top: 1rem;">
+                <button class="btn-primary" id="downloadBtn">⬇️ Download Site</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        var selectedFile = null;
-        var extractedData = null;
-        var generatedHTML = null;
-        var generatedZip = null;
-        var processingLog = [];
+        let currentPPTX = null;
+        let generatedHTML = null;
+        let generatedAssets = {};
 
-        var dropZone = document.getElementById('dropZone');
-        var fileInput = document.getElementById('fileInput');
-        var fileInfo = document.getElementById('fileInfo');
-        var uploadStatus = document.getElementById('uploadStatus');
-        var summary = document.getElementById('summary');
-        var summaryContent = document.getElementById('summaryContent');
-        var loading = document.getElementById('loading');
-        var loadingText = document.getElementById('loadingText');
-        var preview = document.getElementById('preview');
-        var previewIframe = document.getElementById('previewIframe');
-        var generateBtn = document.getElementById('generateBtn');
-        var downloadBtn = document.getElementById('downloadBtn');
-        var editBtn = document.getElementById('editBtn');
-        var resetBtn = document.getElementById('resetBtn');
+        // ============================================
+        // HIERARCHY ENGINE
+        // ============================================
+        class HierarchyEngine {
+            constructor() {
+                this.slides = [];
+                this.globalElements = new Map();
+            }
 
-        var fontMappings = {
-            'titillium': 'Titillium Web',
-            'inter': 'Inter',
-            'roboto': 'Roboto',
-            'montserrat': 'Montserrat',
-            'merriweather': 'Merriweather',
-            'plex': 'IBM Plex Mono',
-            'source': 'Source Sans 3',
-            'lato': 'Lato',
-            'open': 'Open Sans',
-            'poppins': 'Poppins',
-            'raleway': 'Raleway',
-            'ubuntu': 'Ubuntu',
-            'helvetica': 'Helvetica Neue',
-            'arial': 'Arial',
-            'georgia': 'Georgia',
-            'times': 'Times New Roman'
-        };
+            analyzeSlides(slides) {
+                this.slides = slides;
+                this.detectGlobalElements();
+                this.scoreElements();
+                return this.classifySlides();
+            }
 
-        dropZone.addEventListener('click', function() { fileInput.click(); });
-        dropZone.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                fileInput.click();
+            detectGlobalElements() {
+                // Track recurring text and images
+                const textFrequency = new Map();
+                const imageFrequency = new Map();
+
+                this.slides.forEach((slide, idx) => {
+                    // Track text
+                    slide.textRuns?.forEach(run => {
+                        const key = run.text.substring(0, 50);
+                        textFrequency.set(key, (textFrequency.get(key) || 0) + 1);
+                    });
+
+                    // Track images
+                    slide.images?.forEach(img => {
+                        imageFrequency.set(img.name, (imageFrequency.get(img.name) || 0) + 1);
+                    });
+                });
+
+                // Mark recurring elements as global (80%+ of slides)
+                const threshold = Math.ceil(this.slides.length * 0.8);
+                textFrequency.forEach((count, text) => {
+                    if (count >= threshold) {
+                        this.globalElements.set(`text:${text}`, { type: 'text', count });
+                    }
+                });
+                imageFrequency.forEach((count, name) => {
+                    if (count >= threshold) {
+                        this.globalElements.set(`image:${name}`, { type: 'image', count });
+                    }
+                });
+            }
+
+            scoreElements() {
+                this.slides.forEach(slide => {
+                    // Score text runs
+                    slide.textRuns?.forEach(run => {
+                        const size = run.fontSize || 12;
+                        const isBold = run.bold ? 1 : 0;
+                        const isUnique = !this.globalElements.has(`text:${run.text.substring(0, 50)}`) ? 1 : 0;
+                        
+                        run.salience = (size / 72) * 0.4 + isBold * 0.3 + isUnique * 0.3;
+                    });
+
+                    // Score images
+                    slide.images?.forEach(img => {
+                        const isUnique = !this.globalElements.has(`image:${img.name}`) ? 1 : 0;
+                        const size = (img.width * img.height) / 1000000;
+                        
+                        img.salience = Math.min(size * 0.6, 1) * 0.7 + isUnique * 0.3;
+                    });
+                });
+            }
+
+            classifySlides() {
+                return this.slides.map((slide, idx) => {
+                    const classification = {
+                        index: idx,
+                        type: this.detectSlideType(slide),
+                        primary: this.getPrimaryElement(slide),
+                        secondary: this.getSecondaryElements(slide),
+                        supporting: this.getSupportingElements(slide)
+                    };
+                    return classification;
+                });
+            }
+
+            detectSlideType(slide) {
+                const hasImages = slide.images && slide.images.length > 0;
+                const textLength = slide.textRuns?.reduce((sum, r) => sum + r.text.length, 0) || 0;
+                const textCount = slide.textRuns?.length || 0;
+
+                if (textLength < 100 && hasImages) return 'image-focus';
+                if (textCount > 5) return 'list';
+                if (textLength > 300) return 'text-heavy';
+                if (hasImages && textLength > 100) return 'balanced';
+                return 'content';
+            }
+
+            getPrimaryElement(slide) {
+                const allElements = [
+                    ...(slide.images || []),
+                    ...(slide.textRuns || [])
+                ];
+
+                return allElements.reduce((max, el) => 
+                    (el.salience || 0) > (max.salience || 0) ? el : max
+                , null);
+            }
+
+            getSecondaryElements(slide) {
+                const allElements = [
+                    ...(slide.images || []),
+                    ...(slide.textRuns || [])
+                ];
+
+                return allElements
+                    .filter(el => el !== this.getPrimaryElement(slide))
+                    .sort((a, b) => (b.salience || 0) - (a.salience || 0))
+                    .slice(0, 2);
+            }
+
+            getSupportingElements(slide) {
+                const allElements = [
+                    ...(slide.images || []),
+                    ...(slide.textRuns || [])
+                ];
+                const primary = this.getPrimaryElement(slide);
+                const secondary = this.getSecondaryElements(slide);
+
+                return allElements.filter(el => el !== primary && !secondary.includes(el));
+            }
+        }
+
+        // ============================================
+        // LAYOUT GENERATOR
+        // ============================================
+        class LayoutGenerator {
+            generateLayout(classification, slide, designSystem) {
+                const type = classification.type;
+                const primary = classification.primary;
+                const secondary = classification.secondary;
+
+                switch(type) {
+                    case 'image-focus':
+                        return this.imageLayout(slide, primary, secondary, designSystem);
+                    case 'text-heavy':
+                        return this.textLayout(slide, primary, secondary, designSystem);
+                    case 'list':
+                        return this.listLayout(slide, primary, secondary, designSystem);
+                    case 'balanced':
+                        return this.balancedLayout(slide, primary, secondary, designSystem);
+                    default:
+                        return this.contentLayout(slide, primary, secondary, designSystem);
+                }
+            }
+
+            imageLayout(slide, primary, secondary, ds) {
+                let html = '<div class="product-grid">';
+                
+                if (primary && primary.data) {
+                    html += `<div class="product-image"><img src="assets/${primary.name}" alt="Product" /></div>`;
+                }
+
+                html += '<div>';
+                if (secondary && secondary[0]) {
+                    html += `<h2>${this.escapeHtml(secondary[0].text || '')}</h2>`;
+                }
+                slide.textRuns?.slice(1).forEach(run => {
+                    if (run.text && run.text.length > 20) {
+                        html += `<p>${this.escapeHtml(run.text)}</p>`;
+                    }
+                });
+                html += '</div></div>';
+
+                return html;
+            }
+
+            textLayout(slide, primary, secondary, ds) {
+                let html = '<div>';
+                
+                if (primary && primary.text) {
+                    html += `<h2>${this.escapeHtml(primary.text)}</h2>`;
+                }
+
+                slide.textRuns?.forEach(run => {
+                    if (run.text && run.text !== primary?.text) {
+                        if (run.fontSize > 20) {
+                            html += `<h3>${this.escapeHtml(run.text)}</h3>`;
+                        } else {
+                            html += `<p>${this.escapeHtml(run.text)}</p>`;
+                        }
+                    }
+                });
+
+                html += '</div>';
+                return html;
+            }
+
+            listLayout(slide, primary, secondary, ds) {
+                let html = '<div>';
+                
+                if (primary && primary.text) {
+                    html += `<h2>${this.escapeHtml(primary.text)}</h2>`;
+                }
+
+                html += '<ul>';
+                slide.textRuns?.forEach(run => {
+                    if (run.text && run.text !== primary?.text && run.text.length > 10) {
+                        html += `<li>${this.escapeHtml(run.text)}</li>`;
+                    }
+                });
+                html += '</ul>';
+
+                html += '</div>';
+                return html;
+            }
+
+            balancedLayout(slide, primary, secondary, ds) {
+                let html = '<div class="product-grid">';
+
+                if (primary && primary.data) {
+                    html += `<div class="product-image"><img src="assets/${primary.name}" alt="Content" /></div>`;
+                }
+
+                html += '<div>';
+                slide.textRuns?.forEach(run => {
+                    if (run.text && run.text.length > 10) {
+                        html += `<p>${this.escapeHtml(run.text)}</p>`;
+                    }
+                });
+                html += '</div></div>';
+
+                return html;
+            }
+
+            contentLayout(slide, primary, secondary, ds) {
+                let html = '<div>';
+                
+                slide.textRuns?.forEach(run => {
+                    if (run.text && run.text.length > 5) {
+                        html += `<p>${this.escapeHtml(run.text)}</p>`;
+                    }
+                });
+
+                slide.images?.forEach(img => {
+                    html += `<img src="assets/${img.name}" alt="Content" style="max-width: 100%; margin: 1rem 0;" />`;
+                });
+
+                html += '</div>';
+                return html;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // ============================================
+        // DESIGN SYSTEM
+        // ============================================
+        class DesignSystem {
+            constructor(theme = 'cyber') {
+                this.theme = theme;
+                this.colors = this.getThemeColors(theme);
+            }
+
+            getThemeColors(theme) {
+                const themes = {
+                    cyber: {
+                        background: '#1a0a2e',
+                        foreground: '#f5f5f5',
+                        primary: '#00d9ff',
+                        secondary: '#a855f7',
+                        accent: '#ff006e',
+                        muted: '#666'
+                    },
+                    ocean: {
+                        background: '#0a1628',
+                        foreground: '#e8f4f8',
+                        primary: '#0ea5e9',
+                        secondary: '#06b6d4',
+                        accent: '#0284c7',
+                        muted: '#64748b'
+                    },
+                    forest: {
+                        background: '#0f2818',
+                        foreground: '#f0fdf4',
+                        primary: '#22c55e',
+                        secondary: '#10b981',
+                        accent: '#059669',
+                        muted: '#6b7280'
+                    },
+                    sunset: {
+                        background: '#2a1810',
+                        foreground: '#fef3c7',
+                        primary: '#f97316',
+                        secondary: '#ea580c',
+                        accent: '#dc2626',
+                        muted: '#9ca3af'
+                    }
+                };
+                return themes[theme] || themes.cyber;
+            }
+
+            generateCSS() {
+                const c = this.colors;
+                return `
+                    :root {
+                        --background: ${c.background};
+                        --foreground: ${c.foreground};
+                        --primary: ${c.primary};
+                        --secondary: ${c.secondary};
+                        --accent: ${c.accent};
+                        --muted: ${c.muted};
+                    }
+
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+
+                    html {
+                        scroll-behavior: smooth;
+                    }
+
+                    body {
+                        font-family: 'Titillium Web', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        background-color: var(--background);
+                        color: var(--foreground);
+                        line-height: 1.6;
+                        overflow-x: hidden;
+                    }
+
+                    .progress-bar {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        height: 4px;
+                        background: linear-gradient(90deg, var(--primary), var(--secondary));
+                        z-index: 1000;
+                        transition: width 0.3s ease;
+                    }
+
+                    section {
+                        min-height: auto;
+                        display: flex;
+                        align-items: center;
+                        position: relative;
+                        overflow: hidden;
+                        padding: 72px 0;
+                    }
+
+                    @media (min-width: 1024px) {
+                        section {
+                            min-height: 100vh;
+                            padding: 0;
+                        }
+                    }
+
+                    .container {
+                        max-width: 1200px;
+                        margin: 0 auto;
+                        padding: 2rem;
+                        width: 100%;
+                        position: relative;
+                        z-index: 10;
+                    }
+
+                    h1 {
+                        font-size: clamp(2.5rem, 8vw, 5rem);
+                        font-weight: 700;
+                        line-height: 1.2;
+                        margin-bottom: 1.5rem;
+                        background: linear-gradient(135deg, var(--primary), #fff, var(--secondary));
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        background-clip: text;
+                    }
+
+                    h2 {
+                        font-size: clamp(2rem, 5vw, 3.5rem);
+                        font-weight: 700;
+                        margin-bottom: 2rem;
+                    }
+
+                    h3 {
+                        font-size: 1.5rem;
+                        font-weight: 600;
+                        margin-bottom: 1rem;
+                    }
+
+                    p {
+                        font-size: 1.1rem;
+                        color: rgba(255, 255, 255, 0.8);
+                        margin-bottom: 1rem;
+                    }
+
+                    .subtitle {
+                        font-size: 1.3rem;
+                        color: rgba(255, 255, 255, 0.6);
+                        font-weight: 300;
+                    }
+
+                    .bg-image {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        opacity: 0.3;
+                        z-index: 1;
+                    }
+
+                    .overlay {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: linear-gradient(135deg, rgba(26, 10, 46, 0.8), rgba(26, 10, 46, 0.6));
+                        z-index: 2;
+                    }
+
+                    #hero {
+                        background: linear-gradient(135deg, ${c.background} 0%, ${this.lighten(c.background, 20)} 100%);
+                    }
+
+                    .hero-content {
+                        text-align: center;
+                        animation: fadeInUp 1s ease-out;
+                    }
+
+                    .arrow-down {
+                        position: absolute;
+                        bottom: 2rem;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        animation: bounce 2s infinite;
+                        color: var(--primary);
+                        opacity: 0.5;
+                        font-size: 2rem;
+                    }
+
+                    @keyframes fadeInUp {
+                        from {
+                            opacity: 0;
+                            transform: translateY(30px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateY(0);
+                        }
+                    }
+
+                    @keyframes bounce {
+                        0%, 100% {
+                            transform: translateX(-50%) translateY(0);
+                        }
+                        50% {
+                            transform: translateX(-50%) translateY(-10px);
+                        }
+                    }
+
+                    .product-grid {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 3rem;
+                        align-items: center;
+                    }
+
+                    .product-image {
+                        position: relative;
+                        aspect-ratio: 1;
+                        border-radius: 2rem;
+                        overflow: hidden;
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        box-shadow: 0 20px 60px rgba(168, 85, 247, 0.2);
+                    }
+
+                    .product-image img {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                    }
+
+                    .fade-in {
+                        opacity: 0;
+                        transform: translateY(18px);
+                        transition: opacity 700ms ease, transform 700ms ease;
+                    }
+
+                    .fade-in.is-visible {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+
+                    @media (prefers-reduced-motion: reduce) {
+                        .fade-in {
+                            opacity: 1;
+                            transform: none;
+                            transition: none;
+                        }
+                    }
+
+                    @media (max-width: 768px) {
+                        .product-grid {
+                            grid-template-columns: 1fr;
+                        }
+
+                        h1 {
+                            font-size: 2rem;
+                        }
+
+                        h2 {
+                            font-size: 1.5rem;
+                        }
+
+                        .container {
+                            padding: 1rem;
+                        }
+
+                        section {
+                            min-height: auto;
+                            padding: 2rem 0;
+                        }
+                    }
+
+                    footer {
+                        padding: 2rem;
+                        border-top: 1px solid rgba(255, 255, 255, 0.1);
+                        background: rgba(255, 255, 255, 0.02);
+                        text-align: center;
+                        color: rgba(255, 255, 255, 0.5);
+                        font-size: 0.9rem;
+                    }
+                `;
+            }
+
+            lighten(color, percent) {
+                const num = parseInt(color.replace("#",""), 16);
+                const amt = Math.round(2.55 * percent);
+                const R = (num >> 16) + amt;
+                const G = (num >> 8 & 0x00FF) + amt;
+                const B = (num & 0x0000FF) + amt;
+                return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 +
+                    (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255))
+                    .toString(16).slice(1);
+            }
+        }
+
+        // ============================================
+        // PPTX PARSER
+        // ============================================
+        async function parsePPTX(file) {
+            try {
+                const zip = new JSZip();
+                const pptxData = await zip.loadAsync(file);
+
+                // Get slide count
+                const slideCount = Object.keys(pptxData.files)
+                    .filter(name => name.match(/ppt\/slides\/slide\d+\.xml/))
+                    .length;
+
+                // Get media count
+                const mediaCount = Object.keys(pptxData.files)
+                    .filter(name => name.match(/ppt\/media\//))
+                    .length;
+
+                // Extract slides
+                const slides = [];
+                for (let i = 1; i <= slideCount; i++) {
+                    const slideXml = await pptxData.file(`ppt/slides/slide${i}.xml`)?.async('string');
+                    if (slideXml) {
+                        const slide = parseSlideXML(slideXml, i);
+                        slides.push(slide);
+                    }
+                }
+
+                // Extract media
+                const assets = {};
+                for (const [name, file] of Object.entries(pptxData.files)) {
+                    if (name.match(/ppt\/media\//)) {
+                        const mediaName = name.split('/').pop();
+                        assets[mediaName] = await file.async('blob');
+                    }
+                }
+
+                return { slides, assets, slideCount, mediaCount };
+            } catch (error) {
+                console.error('PPTX parsing error:', error);
+                throw new Error('Failed to parse PPTX file');
+            }
+        }
+
+        function parseSlideXML(xml, slideNum) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xml, 'text/xml');
+
+            const textRuns = [];
+            const images = [];
+
+            // Extract text
+            doc.querySelectorAll('a\\:t').forEach(el => {
+                const text = el.textContent?.trim();
+                if (text) {
+                    textRuns.push({
+                        text,
+                        fontSize: 12,
+                        bold: false
+                    });
+                }
+            });
+
+            // Extract images
+            doc.querySelectorAll('p\\:cSld a\\:blip').forEach(el => {
+                const rId = el.getAttribute('r:embed');
+                if (rId) {
+                    images.push({
+                        name: `slide-${slideNum}-image-${images.length}.jpg`,
+                        rId
+                    });
+                }
+            });
+
+            return { slideNum, textRuns, images };
+        }
+
+        // ============================================
+        // UI HANDLERS
+        // ============================================
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('active');
+        });
+        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('active'));
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('active');
+            handleFileUpload(e.dataTransfer.files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                handleFileUpload(e.target.files[0]);
             }
         });
-        dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('over'); });
-        dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('over'); });
-        dropZone.addEventListener('drop', function(e) { e.preventDefault(); dropZone.classList.remove('over'); handleFile(e.dataTransfer.files[0]); });
-        fileInput.addEventListener('change', function(e) { handleFile(e.target.files[0]); });
 
-        function handleFile(file) {
-            if (!file) return;
+        async function handleFileUpload(file) {
             if (!file.name.endsWith('.pptx')) {
-                showStatus('Please select a valid PPTX file.', 'err');
+                showStatus('uploadStatus', 'Please upload a .pptx file', 'error');
                 return;
             }
-            selectedFile = file;
-            fileInfo.textContent = '✓ ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
-            fileInfo.classList.add('show');
-            generateBtn.disabled = false;
-            showStatus('File ready to process!', 'ok');
-        }
-
-        function showStatus(message, type) {
-            uploadStatus.textContent = message;
-            uploadStatus.className = 'msg show ' + type;
-        }
-
-        function addLog(message, type) {
-            processingLog.push({ message: message, type: type || 'info' });
-            console.log('[' + type.toUpperCase() + '] ' + message);
-        }
-
-        function updateSummary() {
-            var html = '<h3>Design Analysis</h3>';
-            for (var i = 0; i < processingLog.length; i++) {
-                var log = processingLog[i];
-                var prefix = log.type === 'warn' ? '⚠️' : log.type === 'err' ? '❌' : '✓';
-                html += '<div class="summary-item">' + prefix + ' ' + log.message + '</div>';
-            }
-            summaryContent.innerHTML = html;
-            summary.classList.add('show');
-        }
-
-        function escapeHtml(text) {
-            var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-        }
-
-        function mapFont(fontName) {
-            if (!fontName) return 'Inter';
-            var lower = fontName.toLowerCase();
-            for (var key in fontMappings) {
-                if (lower.includes(key)) return fontMappings[key];
-            }
-            return 'Inter';
-        }
-
-        function extractPPTXData(pptxZip) {
-            var data = {
-                fonts: { primary: 'Inter', secondary: 'Inter' },
-                colors: { primary: '#0076BA', secondary: '#05A89D', background: '#ffffff', foreground: '#1a1a1a', accent: '#F9B900' },
-                slides: [],
-                images: [],
-                colorPalette: [],
-                designStyle: 'modern'
-            };
 
             try {
-                var themeFile = pptxZip.file('ppt/theme/theme1.xml');
-                if (themeFile) {
-                    var themeXml = themeFile.asText();
-                    
-                    var majorFontMatch = themeXml.match(/<a:majorFont><a:latin typeface="([^"]+)"/);
-                    var minorFontMatch = themeXml.match(/<a:minorFont><a:latin typeface="([^"]+)"/);
-                    if (majorFontMatch) data.fonts.primary = mapFont(majorFontMatch[1]);
-                    if (minorFontMatch) data.fonts.secondary = mapFont(minorFontMatch[1]);
-                    
-                    var accent1Match = themeXml.match(/<a:accent1><a:srgbClr val="([0-9A-Fa-f]{6})"/);
-                    var accent2Match = themeXml.match(/<a:accent2><a:srgbClr val="([0-9A-Fa-f]{6})"/);
-                    var accent3Match = themeXml.match(/<a:accent3><a:srgbClr val="([0-9A-Fa-f]{6})"/);
-                    var accent4Match = themeXml.match(/<a:accent4><a:srgbClr val="([0-9A-Fa-f]{6})"/);
-                    
-                    if (accent1Match) data.colors.primary = '#' + accent1Match[1];
-                    if (accent2Match) data.colors.secondary = '#' + accent2Match[1];
-                    if (accent3Match) data.colorPalette.push('#' + accent3Match[1]);
-                    if (accent4Match) { data.colors.accent = '#' + accent4Match[1]; data.colorPalette.push('#' + accent4Match[1]); }
-                    
-                    addLog('Fonts: ' + data.fonts.primary + ' (primary), ' + data.fonts.secondary + ' (secondary)', 'info');
-                    addLog('Colors: ' + data.colors.primary + ', ' + data.colors.secondary, 'info');
-                } else {
-                    addLog('No theme file found, using defaults', 'warn');
-                }
-            } catch (e) {
-                addLog('Error parsing theme: ' + e.message, 'warn');
-            }
+                showStatus('uploadStatus', 'Parsing PPTX...', 'info');
+                const result = await parsePPTX(file);
+                currentPPTX = result;
 
-            try {
-                var slideFolder = pptxZip.folder('ppt/slides');
-                if (slideFolder) {
-                    var slideFiles = [];
-                    slideFolder.forEach(function(path, file) {
-                        if (path.match(/slide\d+\.xml$/) && !path.includes('_rels')) {
-                            slideFiles.push(path);
-                        }
-                    });
-                    slideFiles.sort();
+                document.getElementById('slideCount').textContent = result.slideCount;
+                document.getElementById('imageCount').textContent = result.mediaCount;
+                document.getElementById('stats').style.display = 'grid';
 
-                    for (var i = 0; i < slideFiles.length; i++) {
-                        var slideFile = slideFiles[i];
-                        var xmlContent = slideFolder.file(slideFile).asText();
-                        
-                        var textNodes = xmlContent.match(/<a:t>([^<]+)<\/a:t>/g) || [];
-                        var text = '';
-                        for (var j = 0; j < textNodes.length; j++) {
-                            text += textNodes[j].replace(/<a:t>|<\/a:t>/g, '') + ' ';
-                        }
-                        
-                        var hasImage = xmlContent.includes('blip') || xmlContent.includes('image');
-                        var hasBackground = xmlContent.includes('solidFill') || xmlContent.includes('gradFill');
-                        var textLength = text.trim().length;
-                        var lineCount = text.split('\n').length;
-                        
-                        var layout = 'content';
-                        if (i === 0) layout = 'hero';
-                        else if (hasImage && textLength < 100) layout = 'image-focus';
-                        else if (lineCount > 5) layout = 'list';
-                        else if (textLength > 300) layout = 'text-heavy';
-                        
-                        data.slides.push({
-                            number: i + 1,
-                            text: text.trim(),
-                            layout: layout,
-                            hasImage: hasImage,
-                            hasBackground: hasBackground,
-                            textLength: textLength
-                        });
-                    }
-                    addLog('Analyzed ' + data.slides.length + ' slides with design detection', 'info');
-                } else {
-                    addLog('No slides found', 'err');
-                }
-            } catch (e) {
-                addLog('Error parsing slides: ' + e.message, 'err');
-            }
-
-            try {
-                var mediaFolder = pptxZip.folder('ppt/media');
-                if (mediaFolder) {
-                    var imageCount = 0;
-                    mediaFolder.forEach(function(path, file) {
-                        if (path.includes('.emf') || path.includes('.wmf')) {
-                            addLog('Skipped EMF/WMF: ' + path, 'warn');
-                        } else if (path.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                            file.async('arraybuffer').then(function(data) {
-                                data.images.push({ path: path, data: data });
-                            });
-                            imageCount++;
-                        }
-                    });
-                    if (imageCount > 0) addLog('Extracted ' + imageCount + ' images', 'info');
-                }
-            } catch (e) {
-                addLog('Error extracting images: ' + e.message, 'warn');
-            }
-
-            return data;
-        }
-
-        function generateBespokeHTML(data) {
-            var sections = '';
-            var colorIndex = 0;
-            
-            for (var i = 0; i < data.slides.length; i++) {
-                var slide = data.slides[i];
-                var bgColor = i % 2 === 0 ? data.colors.background : '#f8f9fa';
-                var textColor = i % 2 === 0 ? data.colors.foreground : data.colors.primary;
-                var accentColor = data.colorPalette[colorIndex % data.colorPalette.length] || data.colors.secondary;
-                colorIndex++;
-                
-                var heading = slide.text.split('\n')[0] || 'Section ' + (i + 1);
-                var body = slide.text.substring(heading.length).trim();
-                
-                if (slide.layout === 'hero') {
-                    sections += '<section class="hero" style="background:linear-gradient(135deg,' + data.colors.primary + ',#' + (parseInt(data.colors.primary.substring(1), 16) + 0x333333).toString(16).substring(0, 6) + ');color:#fff"><div class="section-content"><h1>' + escapeHtml(heading) + '</h1><p style="font-size:1.2rem;opacity:0.9">' + escapeHtml(body.substring(0, 100)) + '</p></div></section>';
-                } else if (slide.layout === 'image-focus') {
-                    sections += '<section class="image-focus" style="background:' + bgColor + ';border-left:6px solid ' + accentColor + '"><div class="section-content"><h2 style="color:' + data.colors.primary + '">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';margin-top:1rem">' + escapeHtml(body.substring(0, 150)) + '</p></div></section>';
-                } else if (slide.layout === 'list') {
-                    var bullets = body.split('\n').filter(function(l) { return l.trim(); });
-                    var listHtml = '<section class="list" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + data.colors.primary + ';border-bottom:3px solid ' + accentColor + ';padding-bottom:1rem">' + escapeHtml(heading) + '</h2><ul style="margin-left:2rem;margin-top:1.5rem">';
-                    for (var j = 0; j < Math.min(bullets.length, 5); j++) {
-                        listHtml += '<li style="margin-bottom:0.75rem;color:' + textColor + '"><span style="color:' + accentColor + ';font-weight:700">•</span> ' + escapeHtml(bullets[j]) + '</li>';
-                    }
-                    listHtml += '</ul></div></section>';
-                    sections += listHtml;
-                } else if (slide.layout === 'text-heavy') {
-                    sections += '<section class="text-heavy" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + data.colors.primary + ';margin-bottom:1.5rem">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';line-height:1.8;font-size:1.05rem">' + escapeHtml(body.substring(0, 300)) + '</p></div></section>';
-                } else {
-                    sections += '<section class="content" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + data.colors.primary + '">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';margin-top:1rem">' + escapeHtml(body.substring(0, 200)) + '</p></div></section>';
-                }
-            }
-
-            var googleFont = data.fonts.primary.replace(/ /g, '+');
-            var css = ':root{--primary:' + data.colors.primary + ';--secondary:' + data.colors.secondary + ';--accent:' + data.colors.accent + ';--bg:#fff;--text:' + data.colors.foreground + '}*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:"' + data.fonts.primary + '",-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}.progress-bar{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--primary),var(--secondary),var(--accent));z-index:1000;width:0;transition:width 0.3s ease}section{min-height:auto;display:flex;align-items:center;position:relative;overflow:hidden;padding:72px 2rem}@media(min-width:1024px){section{min-height:100vh;padding:0 2rem}}section.hero{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;text-align:center}section.hero h1{font-size:clamp(2.5rem,8vw,4.5rem);margin-bottom:1rem;font-weight:800}section.hero p{font-size:clamp(1rem,3vw,1.5rem);opacity:0.95}.section-content{max-width:1000px;margin:0 auto;width:100%;position:relative;z-index:10}h1,h2{font-weight:700;margin-bottom:1rem}h1{font-size:clamp(2rem,8vw,4rem)}h2{font-size:clamp(1.5rem,5vw,2.5rem)}p{font-size:1.1rem;margin-bottom:1rem}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.75rem;list-style:none}li:before{content:"▸";margin-right:0.75rem;color:var(--secondary);font-weight:700}footer{padding:2rem;border-top:2px solid var(--primary);text-align:center;color:var(--text);opacity:0.7;font-size:0.9rem}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}@media(max-width:768px){section{padding:72px 1rem}}';
-
-            var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + escapeHtml(data.slides[0].text.split('\n')[0] || 'Scrollytelling') + '</title><link href="https://fonts.googleapis.com/css2?family=' + googleFont + ':wght@400;600;700;800&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="progress-bar" id="pb"></div>' + sections + '<footer><p>Created with PPTX to Scrollytelling</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"})<\/script></body></html>';
-
-            return html;
-        }
-
-        function createOutputZip(data) {
-            var zip = new JSZip();
-            zip.file('index.html', generatedHTML);
-
-            var assetsFolder = zip.folder('assets');
-            for (var i = 0; i < data.images.length; i++) {
-                var img = data.images[i];
-                var filename = img.path.split('/').pop();
-                assetsFolder.file(filename, img.data, { binary: true });
-            }
-
-            var report = 'BESPOKE DESIGN REPORT\n';
-            report += '====================\n\n';
-            report += 'Generated: ' + new Date().toISOString() + '\n\n';
-            report += 'DESIGN ANALYSIS\n';
-            report += 'Primary Font: ' + data.fonts.primary + '\n';
-            report += 'Secondary Font: ' + data.fonts.secondary + '\n';
-            report += 'Primary Color: ' + data.colors.primary + '\n';
-            report += 'Secondary Color: ' + data.colors.secondary + '\n';
-            report += 'Accent Color: ' + data.colors.accent + '\n\n';
-            report += 'SLIDE ANALYSIS\n';
-            report += 'Total Slides: ' + data.slides.length + '\n';
-            for (var i = 0; i < data.slides.length; i++) {
-                report += 'Slide ' + (i + 1) + ': ' + data.slides[i].layout + ' layout\n';
-            }
-            report += '\nCONTENT EXTRACTION\n';
-            report += 'Images: ' + data.images.length + '\n\n';
-            report += 'PROCESSING LOG\n';
-            for (var i = 0; i < processingLog.length; i++) {
-                report += '[' + processingLog[i].type.toUpperCase() + '] ' + processingLog[i].message + '\n';
-            }
-
-            zip.file('DESIGN_REPORT.txt', report);
-            return zip;
-        }
-
-        generateBtn.addEventListener('click', function() {
-            if (!selectedFile) return;
-            loading.classList.add('show');
-            generateBtn.disabled = true;
-            preview.classList.remove('show');
-            processingLog = [];
-
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    JSZip.loadAsync(e.target.result).then(function(pptxZip) {
-                        loadingText.textContent = 'Analyzing design and extracting content...';
-                        extractedData = extractPPTXData(pptxZip);
-
-                        loadingText.textContent = 'Generating bespoke scrollytelling site...';
-                        generatedHTML = generateBespokeHTML(extractedData);
-
-                        loadingText.textContent = 'Creating download package...';
-                        generatedZip = createOutputZip(extractedData);
-
-                        loading.classList.remove('show');
-                        generateBtn.disabled = false;
-                        updateSummary();
-
-                        previewIframe.srcdoc = generatedHTML;
-                        preview.classList.add('show');
-
-                        showStatus('✓ Bespoke site generated! Review and download below.', 'ok');
-                    }).catch(function(error) {
-                        console.error('Error:', error);
-                        loading.classList.remove('show');
-                        generateBtn.disabled = false;
-                        addLog('Fatal error: ' + error.message, 'err');
-                        updateSummary();
-                        showStatus('Error: ' + error.message, 'err');
-                    });
-                } catch (error) {
-                    console.error('Error:', error);
-                    loading.classList.remove('show');
-                    generateBtn.disabled = false;
-                    addLog('Fatal error: ' + error.message, 'err');
-                    updateSummary();
-                    showStatus('Error: ' + error.message, 'err');
-                }
-            };
-            reader.onerror = function() {
-                loading.classList.remove('show');
                 generateBtn.disabled = false;
-                addLog('File read error', 'err');
-                updateSummary();
-                showStatus('Error reading file', 'err');
-            };
-            reader.readAsArrayBuffer(selectedFile);
+                showStatus('uploadStatus', `✓ Loaded ${result.slideCount} slides with ${result.mediaCount} images`, 'success');
+            } catch (error) {
+                showStatus('uploadStatus', error.message, 'error');
+                generateBtn.disabled = true;
+            }
+        }
+
+        generateBtn.addEventListener('click', async () => {
+            if (!currentPPTX) return;
+
+            try {
+                showStatus('generateStatus', 'Generating site...', 'info');
+
+                // Analyze hierarchy
+                const hierarchy = new HierarchyEngine();
+                const classifications = hierarchy.analyzeSlides(currentPPTX.slides);
+
+                // Get design system
+                const theme = document.getElementById('themeSelect').value === 'auto' ? 'cyber' : document.getElementById('themeSelect').value;
+                const designSystem = new DesignSystem(theme);
+
+                // Generate layouts
+                const layoutGen = new LayoutGenerator();
+                let sectionsHTML = '';
+
+                classifications.forEach((classification, idx) => {
+                    const slide = currentPPTX.slides[idx];
+                    const layout = layoutGen.generateLayout(classification, slide, designSystem);
+                    const bgColor = `hsl(${(idx * 30) % 360}, 50%, ${idx % 2 === 0 ? 15 : 20}%)`;
+
+                    sectionsHTML += `
+                        <section style="background: linear-gradient(135deg, ${bgColor} 0%, ${bgColor}dd 100%);">
+                            <div class="container">
+                                ${layout}
+                            </div>
+                        </section>
+                    `;
+                });
+
+                // Generate HTML
+                const siteTitle = document.getElementById('siteTitle').value;
+                const copyright = document.getElementById('copyright').value;
+
+                generatedHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${siteTitle}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        ${designSystem.generateCSS()}
+    </style>
+</head>
+<body>
+    <div class="progress-bar" id="progressBar"></div>
+
+    <section id="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1>${siteTitle}</h1>
+                <p class="subtitle">A scrollytelling experience</p>
+                <div class="arrow-down">↓</div>
+            </div>
+        </div>
+    </section>
+
+    ${sectionsHTML}
+
+    <footer>
+        <p>${copyright}</p>
+    </footer>
+
+    <script>
+        window.addEventListener('scroll', () => {
+            const scrollTop = window.scrollY;
+            const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+            const scrollPercent = (scrollTop / docHeight) * 100;
+            document.getElementById('progressBar').style.width = scrollPercent + '%';
         });
 
-        downloadBtn.addEventListener('click', function() {
-            if (!generatedZip) return;
-            downloadBtn.disabled = true;
-            downloadBtn.textContent = 'Downloading...';
+        const observerOptions = {
+            threshold: 0.15,
+            rootMargin: "0px 0px -10% 0px"
+        };
 
-            generatedZip.generateAsync({ type: 'blob' }).then(function(blob) {
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement('a');
+        const revealObserver = new IntersectionObserver((entries, obs) => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                entry.target.classList.add("is-visible");
+                obs.unobserve(entry.target);
+            });
+        }, observerOptions);
+
+        document.querySelectorAll(".fade-in").forEach(el => {
+            revealObserver.observe(el);
+        });
+    </script>
+</body>
+</html>`;
+
+                // Show preview
+                const preview = document.getElementById('preview');
+                preview.srcdoc = generatedHTML;
+                document.getElementById('previewContainer').classList.add('show');
+
+                showStatus('generateStatus', '✓ Site generated successfully', 'success');
+            } catch (error) {
+                showStatus('generateStatus', error.message, 'error');
+                console.error(error);
+            }
+        });
+
+        downloadBtn.addEventListener('click', async () => {
+            if (!generatedHTML) return;
+
+            try {
+                const zip = new JSZip();
+                zip.file('index.html', generatedHTML);
+
+                // Add assets
+                const assetsFolder = zip.folder('assets');
+                for (const [name, blob] of Object.entries(currentPPTX.assets)) {
+                    assetsFolder.file(name, blob);
+                }
+
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
                 a.href = url;
-                a.download = 'scrollytelling.zip';
+                a.download = 'scrollytelling-site.zip';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                showStatus('✓ Download complete!', 'ok');
-                downloadBtn.disabled = false;
-                downloadBtn.textContent = '✓ Download ZIP';
-            }).catch(function(error) {
+            } catch (error) {
                 console.error('Download error:', error);
-                showStatus('Error downloading: ' + error.message, 'err');
-                downloadBtn.disabled = false;
-                downloadBtn.textContent = '✓ Download ZIP';
-            });
+            }
         });
 
-        editBtn.addEventListener('click', function() {
-            preview.classList.remove('show');
-            generateBtn.disabled = false;
+        resetBtn.addEventListener('click', () => {
+            location.reload();
         });
 
-        resetBtn.addEventListener('click', function() {
-            selectedFile = null;
-            fileInput.value = '';
-            fileInfo.classList.remove('show');
-            generateBtn.disabled = true;
-            uploadStatus.classList.remove('show');
-            preview.classList.remove('show');
-            summary.classList.remove('show');
-            processingLog = [];
-        });
+        function showStatus(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = `status show ${type}`;
+        }
     </script>
 </body>
 </html>
