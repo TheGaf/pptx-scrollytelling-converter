@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
@@ -224,6 +224,19 @@
             var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
             return text.replace(/[&<>"']/g, function(m) { return map[m]; });
         }
+        
+        function sanitizeColor(color) {
+            if (!color || typeof color !== 'string') return '#000000';
+            var cleaned = color.trim();
+            if (/^#[0-9A-Fa-f]{6}$/.test(cleaned)) return cleaned;
+            if (/^#[0-9A-Fa-f]{3}$/.test(cleaned)) return cleaned;
+            return '#000000';
+        }
+        
+        function sanitizeFont(font) {
+            if (!font || typeof font !== 'string') return 'Inter';
+            return font.replace(/[^a-zA-Z0-9 -]/g, '');
+        }
 
         function mapFont(fontName) {
             if (!fontName) return 'Inter';
@@ -423,10 +436,9 @@
             
             for (var i = 0; i < data.slides.length; i++) {
                 var slide = data.slides[i];
-                var bgColor = i % 2 === 0 ? data.colors.background : '#f8f9fa';
-                var accentColor = data.colorPalette.length > 0 
-                    ? data.colorPalette[colorIndex % data.colorPalette.length] 
-                    : data.colors.secondary;
+                var bgColor = sanitizeColor(i % 2 === 0 ? data.colors.background : '#f8f9fa');
+                var textColor = sanitizeColor(i % 2 === 0 ? data.colors.foreground : data.colors.primary);
+                var accentColor = sanitizeColor(data.colorPalette[colorIndex % data.colorPalette.length] || data.colors.secondary);
                 colorIndex++;
                 
                 var heading = slide.text ? (slide.text.split('\n')[0] || 'Section ' + (i + 1)) : 'Section ' + (i + 1);
@@ -440,95 +452,17 @@
                 var sectionClass = slide.layout;
                 var dataAttrs = 'data-reveal="true" data-slide="' + (i + 1) + '"';
                 
+                var safePrimary = sanitizeColor(data.colors.primary);
+                
                 if (slide.layout === 'hero') {
-                    // Hero layout with gradient background
-                    var heroGradient = 'linear-gradient(135deg,' + data.colors.primary + ',' + data.colors.secondary + ')';
-                    sections += '<section class="hero" ' + dataAttrs + ' style="background:' + heroGradient + ';color:#fff">';
-                    sections += '<div class="section-content">';
-                    sections += '<h1>' + escapeHtml(heading) + '</h1>';
-                    if (body) sections += '<p class="hero-text">' + escapeHtml(body.substring(0, 200)) + '</p>';
-                    sections += '</div></section>';
-                    
-                } else if (slide.layout === 'split') {
-                    // Split layout - left/right content separation using CSS Grid
-                    sections += '<section class="split" ' + dataAttrs + ' style="background:' + bgColor + '">';
-                    sections += '<div class="section-content split-container">';
-                    sections += '<div class="split-left">';
-                    sections += '<h2 style="color:' + primaryOnWhite.color + '">' + escapeHtml(heading) + '</h2>';
-                    sections += '<p style="color:' + data.colors.foreground + '">' + escapeHtml(body.substring(0, 250)) + '</p>';
-                    sections += '</div>';
-                    sections += '<div class="split-right">';
-                    if (slide.hasImage) {
-                        sections += '<div class="image-placeholder" style="background:linear-gradient(135deg,' + accentColor + ',#ddd)">';
-                        sections += '<span style="color:#fff;opacity:0.7">Image</span>';
-                        sections += '</div>';
-                    } else {
-                        sections += '<div class="highlight-box" style="background:' + accentColor + ';color:#fff">';
-                        sections += '<p>' + escapeHtml(lines[0] || 'Highlight') + '</p>';
-                        sections += '</div>';
-                    }
-                    sections += '</div>';
-                    sections += '</div></section>';
-                    
-                } else if (slide.layout === 'grid') {
-                    // Grid layout - multiple cards in CSS Grid
-                    sections += '<section class="grid" ' + dataAttrs + ' style="background:' + bgColor + '">';
-                    sections += '<div class="section-content">';
-                    sections += '<h2 class="grid-title" style="color:' + primaryOnWhite.color + '">' + escapeHtml(heading) + '</h2>';
-                    sections += '<div class="grid-container">';
-                    for (var j = 0; j < Math.min(lines.length, 6); j++) {
-                        if (lines[j].trim()) {
-                            sections += '<div class="grid-card" style="border-left:4px solid ' + accentColor + '">';
-                            sections += '<h3 style="color:' + primaryOnWhite.color + '">Item ' + (j + 1) + '</h3>';
-                            sections += '<p class="card-text" style="color:' + data.colors.foreground + '">' + escapeHtml(lines[j].substring(0, 100)) + '</p>';
-                            sections += '</div>';
-                        }
-                    }
-                    sections += '</div></div></section>';
-                    
-                } else if (slide.layout === 'gallery') {
-                    // Gallery layout - multiple images with captions
-                    sections += '<section class="gallery" ' + dataAttrs + ' style="background:' + bgColor + '">';
-                    sections += '<div class="section-content">';
-                    sections += '<h2 class="gallery-title" style="color:' + primaryOnWhite.color + '">' + escapeHtml(heading) + '</h2>';
-                    sections += '<div class="gallery-grid">';
-                    for (var k = 0; k < Math.min(slide.imageCount, 6); k++) {
-                        sections += '<figure class="gallery-item">';
-                        sections += '<div class="gallery-image" style="background:linear-gradient(135deg,' + accentColor + ',#e0e0e0)">';
-                        sections += '<span style="color:#fff;opacity:0.6">Image ' + (k + 1) + '</span>';
-                        sections += '</div>';
-                        sections += '<figcaption style="color:' + data.colors.foreground + '">' + escapeHtml(lines[k] || 'Caption ' + (k + 1)) + '</figcaption>';
-                        sections += '</figure>';
-                    }
-                    sections += '</div></div></section>';
-                    
-                } else if (slide.layout === 'story-text') {
-                    // Story-text layout - immersive text-focused section
-                    sections += '<section class="story-text" ' + dataAttrs + ' style="background:' + bgColor + '">';
-                    sections += '<div class="section-content story-content">';
-                    sections += '<h2 style="color:' + primaryOnWhite.color + ';border-bottom:3px solid ' + accentColor + '">' + escapeHtml(heading) + '</h2>';
-                    sections += '<div class="story-body" style="color:' + data.colors.foreground + '">';
-                    var paragraphs = body.split('\n\n');
-                    for (var p = 0; p < Math.min(paragraphs.length, 5); p++) {
-                        if (paragraphs[p].trim()) {
-                            sections += '<p class="story-paragraph">' + escapeHtml(paragraphs[p].trim()) + '</p>';
-                        }
-                    }
-                    sections += '</div></div></section>';
-                    
+                    sections += '<section class="hero" style="background:linear-gradient(135deg,' + safePrimary + ',#' + (parseInt(safePrimary.substring(1), 16) + 0x333333).toString(16).substring(0, 6) + ');color:#fff"><div class="section-content"><h1>' + escapeHtml(heading) + '</h1><p style="font-size:1.2rem;opacity:0.9">' + escapeHtml(body.substring(0, 100)) + '</p></div></section>';
+                } else if (slide.layout === 'image-focus') {
+                    sections += '<section class="image-focus" style="background:' + bgColor + ';border-left:6px solid ' + accentColor + '"><div class="section-content"><h2 style="color:' + safePrimary + '">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';margin-top:1rem">' + escapeHtml(body.substring(0, 150)) + '</p></div></section>';
                 } else if (slide.layout === 'list') {
-                    // List layout with proper semantic markup
-                    sections += '<section class="list" ' + dataAttrs + ' style="background:' + bgColor + '">';
-                    sections += '<div class="section-content">';
-                    sections += '<h2 style="color:' + primaryOnWhite.color + ';border-bottom:3px solid ' + accentColor + '">' + escapeHtml(heading) + '</h2>';
-                    sections += '<ul class="content-list">';
-                    for (var j = 0; j < Math.min(lines.length, 8); j++) {
-                        if (lines[j].trim()) {
-                            sections += '<li style="color:' + data.colors.foreground + '" data-accent="' + accentColor + '">';
-                            sections += '<span class="bullet" style="color:' + accentColor + '">▸</span>';
-                            sections += '<span>' + escapeHtml(lines[j]) + '</span>';
-                            sections += '</li>';
-                        }
+                    var bullets = body.split('\n').filter(function(l) { return l.trim(); });
+                    var listHtml = '<section class="list" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + safePrimary + ';border-bottom:3px solid ' + accentColor + ';padding-bottom:1rem">' + escapeHtml(heading) + '</h2><ul style="margin-left:2rem;margin-top:1.5rem">';
+                    for (var j = 0; j < Math.min(bullets.length, 5); j++) {
+                        listHtml += '<li style="margin-bottom:0.75rem;color:' + textColor + '"><span style="color:' + accentColor + ';font-weight:700">•</span> ' + escapeHtml(bullets[j]) + '</li>';
                     }
                     sections += '</ul></div></section>';
                     
@@ -538,14 +472,9 @@
                     sections += '<p style="color:' + data.colors.foreground + '">' + escapeHtml(body.substring(0, 150)) + '</p></div></section>';
                     
                 } else if (slide.layout === 'text-heavy') {
-                    sections += '<section class="text-heavy" ' + dataAttrs + ' style="background:' + bgColor + '">';
-                    sections += '<div class="section-content"><h2 style="color:' + primaryOnWhite.color + '">' + escapeHtml(heading) + '</h2>';
-                    sections += '<p style="color:' + data.colors.foreground + ';line-height:1.8">' + escapeHtml(body.substring(0, 400)) + '</p></div></section>';
-                    
+                    sections += '<section class="text-heavy" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + safePrimary + ';margin-bottom:1.5rem">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';line-height:1.8;font-size:1.05rem">' + escapeHtml(body.substring(0, 300)) + '</p></div></section>';
                 } else {
-                    sections += '<section class="content" ' + dataAttrs + ' style="background:' + bgColor + '">';
-                    sections += '<div class="section-content"><h2 style="color:' + primaryOnWhite.color + '">' + escapeHtml(heading) + '</h2>';
-                    sections += '<p style="color:' + data.colors.foreground + '">' + escapeHtml(body.substring(0, 250)) + '</p></div></section>';
+                    sections += '<section class="content" style="background:' + bgColor + '"><div class="section-content"><h2 style="color:' + safePrimary + '">' + escapeHtml(heading) + '</h2><p style="color:' + textColor + ';margin-top:1rem">' + escapeHtml(body.substring(0, 200)) + '</p></div></section>';
                 }
             }
             
@@ -553,29 +482,16 @@
             data.auditLog = auditLog;
             addLog('Generated ' + data.slides.length + ' sections with accessibility checks', 'info');
 
-            var googleFont = data.fonts.primary.replace(/ /g, '+');
-            var secondaryFont = data.fonts.secondary.replace(/ /g, '+');
+            var safePrimary = sanitizeColor(data.colors.primary);
+            var safeSecondary = sanitizeColor(data.colors.secondary);
+            var safeAccent = sanitizeColor(data.colors.accent);
+            var safeForeground = sanitizeColor(data.colors.foreground);
+            var safeFont = sanitizeFont(data.fonts.primary);
+            var googleFont = safeFont.replace(/ /g, '+');
             
-            // Enhanced CSS with design tokens, spacing rhythm, and accessibility
-            var css = generateEnhancedCSS(data, googleFont, secondaryFont);
-            
-            // Generate complete HTML with progressive disclosure scripts
-            var scripts = generateWebScripts();
-            
-            var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">';
-            html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
-            var pageTitle = (data.slides.length > 0 && data.slides[0].text) 
-                ? escapeHtml(data.slides[0].text.split('\n')[0] || 'Scrollytelling')
-                : 'Scrollytelling';
-            html += '<title>' + pageTitle + '</title>';
-            html += '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
-            html += '<link href="https://fonts.googleapis.com/css2?family=' + googleFont + ':wght@400;600;700;800&family=' + secondaryFont + ':wght@400;500;600&display=swap" rel="stylesheet">';
-            html += '<style>' + css + '</style></head><body>';
-            html += '<a href="#main" class="skip-link">Skip to main content</a>';
-            html += '<div class="progress-bar" id="progressBar" role="progressbar" aria-label="Page scroll progress"></div>';
-            html += '<main id="main">' + sections + '</main>';
-            html += '<footer role="contentinfo"><p>Created with PPTX to Scrollytelling Converter</p></footer>';
-            html += scripts + '</body></html>';
+            var css = ':root{--primary:' + safePrimary + ';--secondary:' + safeSecondary + ';--accent:' + safeAccent + ';--bg:#fff;--text:' + safeForeground + '}*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth;overflow-x:auto}body{font-family:"' + safeFont + '",-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;width:1400px;margin:0 auto}.progress-bar{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--primary),var(--secondary),var(--accent));z-index:1000;width:0;transition:width 0.3s ease}section{min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;padding:80px 60px}section.hero{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;text-align:center}section.hero h1{font-size:4rem;margin-bottom:1.5rem;font-weight:800}section.hero p{font-size:1.5rem;opacity:0.95;max-width:800px;margin:0 auto}.section-content{max-width:1000px;width:100%;position:relative;z-index:10}h1,h2{font-weight:700;margin-bottom:1rem}h1{font-size:3.5rem}h2{font-size:2.5rem}p{font-size:1.2rem;margin-bottom:1rem;line-height:1.8}ul{margin-left:2rem;margin-bottom:1rem}li{margin-bottom:0.75rem;list-style:none;font-size:1.1rem}li:before{content:"▸";margin-right:0.75rem;color:var(--secondary);font-weight:700}footer{padding:3rem;border-top:2px solid var(--primary);text-align:center;color:var(--text);opacity:0.7;font-size:1rem}@media(max-width:768px){body{width:375px}section{min-height:100vh;padding:60px 20px}section.hero h1{font-size:2rem;margin-bottom:1rem}section.hero p{font-size:1rem;max-width:335px}.section-content{max-width:335px}h1{font-size:1.75rem}h2{font-size:1.5rem}p{font-size:0.95rem;line-height:1.6}li{font-size:0.9rem}footer{padding:2rem;font-size:0.85rem}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}';
+
+            var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>' + escapeHtml(data.slides[0].text.split('\n')[0] || 'Scrollytelling') + '</title><link href="https://fonts.googleapis.com/css2?family=' + googleFont + ':wght@400;600;700;800&display=swap" rel="stylesheet"><style>' + css + '</style></head><body><div class="progress-bar" id="pb"></div>' + sections + '<footer><p>Created with PPTX to Scrollytelling</p></footer><script>window.addEventListener("scroll",function(){var t=window.scrollY,h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById("pb").style.width=(t/h*100)+"%"})<\/script></body></html>';
 
             return html;
         }
