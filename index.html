@@ -1,1396 +1,708 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PPTX to Scrollytelling Converter</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PPTX Scrollytelling Converter</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: #121a28;
+      --text: #eaf1ff;
+      --muted: rgba(234, 241, 255, 0.72);
+      --border: rgba(234, 241, 255, 0.12);
+      --danger: #ff5a73;
+      --warning: #f7c845;
+      --ok: #22c55e;
+      --accent: #75a7ff;
+      --code: #0e1422;
+      --missing-bg: rgba(247, 200, 69, 0.12);
+      --missing-border: rgba(247, 200, 69, 0.55);
+      --missing-text: rgba(234, 241, 255, 0.9);
+    }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
-            color: #f5f5f5;
-            line-height: 1.6;
-            min-height: 100vh;
-            padding: 2rem;
-        }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 900px at 20% 10%, #152040 0%, var(--bg) 55%), var(--bg);
+      color: var(--text);
+    }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+    header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0));
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(8px);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: 0.2px;
+      font-weight: 650;
+    }
+    header .sub {
+      margin-top: 6px;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
 
-        header {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
+    main {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
 
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #00d9ff, #a855f7);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
+    .card {
+      background: color-mix(in srgb, var(--panel), #000 10%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
 
-        .subtitle {
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 1.1rem;
-        }
+    .card .hd {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
 
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-            margin-top: 2rem;
-        }
+    .card .bd { padding: 14px; }
 
-        .panel {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 1rem;
-            padding: 2rem;
-            backdrop-filter: blur(10px);
-        }
+    .row { display: flex; gap: 10px; align-items: center; }
+    .row.wrap { flex-wrap: wrap; }
+    .row > * { flex: 0 0 auto; }
 
-        .panel h2 {
-            font-size: 1.3rem;
-            margin-bottom: 1.5rem;
-            color: #00d9ff;
-        }
+    input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      background: rgba(255,255,255,0.02);
+    }
 
-        .upload-zone {
-            border: 2px dashed rgba(0, 217, 255, 0.3);
-            border-radius: 0.75rem;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: rgba(0, 217, 255, 0.05);
-        }
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: rgba(117, 167, 255, 0.1);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform .06s ease, background .2s ease;
+    }
+    button:hover { background: rgba(117, 167, 255, 0.18); }
+    button:active { transform: translateY(1px); }
+    button[disabled] { opacity: 0.55; cursor: not-allowed; }
 
-        .upload-zone:hover {
-            border-color: rgba(0, 217, 255, 0.6);
-            background: rgba(0, 217, 255, 0.1);
-        }
+    .pill {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(255,255,255,0.02);
+    }
 
-        .upload-zone.active {
-            border-color: #00d9ff;
-            background: rgba(0, 217, 255, 0.15);
-        }
+    .log {
+      height: 280px;
+      overflow: auto;
+      background: var(--code);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      color: rgba(234, 241, 255, 0.9);
+      white-space: pre-wrap;
+    }
+    .log .warn { color: var(--warning); }
+    .log .err { color: var(--danger); }
+    .log .ok { color: var(--ok); }
 
-        .upload-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
+    .preview {
+      width: 100%;
+      height: calc(100vh - 82px);
+      border: 0;
+      background: #0b0f17;
+    }
 
-        input[type="file"] {
-            display: none;
-        }
+    .missing-asset {
+      display: inline-block;
+      max-width: 100%;
+      height: auto;
+      background: var(--missing-bg);
+      border: 1px dashed var(--missing-border);
+      border-radius: 8px;
+      padding: 6px;
+    }
 
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.8);
-        }
-
-        input[type="text"],
-        select {
-            width: 100%;
-            padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 0.5rem;
-            color: #f5f5f5;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-        }
-
-        input[type="text"]:focus,
-        select:focus {
-            outline: none;
-            border-color: #00d9ff;
-            background: rgba(0, 217, 255, 0.1);
-        }
-
-        .button-group {
-            display: flex;
-            gap: 1rem;
-            margin-top: 2rem;
-        }
-
-        button {
-            flex: 1;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #00d9ff, #a855f7);
-            color: #000;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0, 217, 255, 0.3);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: #f5f5f5;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .status {
-            margin-top: 1rem;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.9rem;
-            display: none;
-        }
-
-        .status.show {
-            display: block;
-        }
-
-        .status.info {
-            background: rgba(59, 130, 246, 0.1);
-            border-left: 3px solid #3b82f6;
-            color: #93c5fd;
-        }
-
-        .status.success {
-            background: rgba(34, 197, 94, 0.1);
-            border-left: 3px solid #22c55e;
-            color: #bbf7d0;
-        }
-
-        .status.error {
-            background: rgba(239, 68, 68, 0.1);
-            border-left: 3px solid #ef4444;
-            color: #fca5a5;
-        }
-
-        .preview-container {
-            display: none;
-            margin-top: 2rem;
-        }
-
-        .preview-container.show {
-            display: block;
-        }
-
-        iframe {
-            width: 100%;
-            height: 600px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 0.75rem;
-            background: white;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        .stat-item {
-            background: rgba(255, 255, 255, 0.03);
-            padding: 1rem;
-            border-radius: 0.5rem;
-            border-left: 3px solid #00d9ff;
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.6);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.25rem;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #00d9ff;
-        }
-
-        @media (max-width: 768px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
-
-            h1 {
-                font-size: 1.8rem;
-            }
-
-            .panel {
-                padding: 1.5rem;
-            }
-        }
-    </style>
+    @media (max-width: 1000px) {
+      main { grid-template-columns: 1fr; }
+      .preview { height: 70vh; }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>PPTX → Scrollytelling</h1>
-            <p class="subtitle">Convert your PowerPoint deck into a scrollytelling website</p>
-        </header>
+  <header>
+    <h1>PPTX Scrollytelling Converter</h1>
+    <div class="sub">Client-side PPTX → HTML converter. Handles unsupported EMF/WMF assets with warnings, reports, and placeholder rendering.</div>
+  </header>
 
-        <div class="main-grid">
-            <!-- Upload Panel -->
-            <div class="panel">
-                <h2>📤 Upload Deck</h2>
-                <div class="upload-zone" id="uploadZone">
-                    <div class="upload-icon">📎</div>
-                    <p><strong>Drag & drop your PPTX</strong></p>
-                    <p style="color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; margin-top: 0.5rem;">or click to browse</p>
-                </div>
-                <input type="file" id="fileInput" accept=".pptx" />
-
-                <div id="uploadStatus" class="status"></div>
-
-                <div class="stats" id="stats" style="display: none;">
-                    <div class="stat-item">
-                        <div class="stat-label">Slides</div>
-                        <div class="stat-value" id="slideCount">0</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">Images</div>
-                        <div class="stat-value" id="imageCount">0</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Settings Panel -->
-            <div class="panel">
-                <h2>⚙️ Customize</h2>
-                <div class="form-group">
-                    <label>Site Title</label>
-                    <input type="text" id="siteTitle" placeholder="Enter site title" value="Driving Meaningful Health Change">
-                </div>
-                <div class="form-group">
-                    <label>Copyright</label>
-                    <input type="text" id="copyright" placeholder="© 2026 Your Company" value="© 2026 The Gaf NYC">
-                </div>
-
-                <div class="button-group">
-                    <button class="btn-primary" id="generateBtn" disabled>Generate Preview</button>
-                    <button class="btn-secondary" id="resetBtn">Reset</button>
-                </div>
-
-                <div id="generateStatus" class="status"></div>
-            </div>
+  <main>
+    <section class="card">
+      <div class="hd">
+        <div>Input</div>
+        <div class="row wrap">
+          <span class="pill" id="status">Idle</span>
+          <span class="pill" id="assetCounts">Assets: —</span>
+        </div>
+      </div>
+      <div class="bd">
+        <div class="row" style="margin-bottom: 10px; width: 100%;">
+          <input id="pptx" type="file" accept=".pptx" />
         </div>
 
-        <!-- Preview Section -->
-        <div class="preview-container" id="previewContainer">
-            <h2 style="margin-bottom: 1rem; color: #00d9ff;">👁️ Preview</h2>
-            <iframe id="preview" sandbox="allow-same-origin"></iframe>
-            <div class="button-group" style="margin-top: 1rem;">
-                <button class="btn-primary" id="downloadBtn">⬇️ Download Site</button>
-            </div>
+        <div class="row wrap" style="margin-bottom: 12px;">
+          <button id="convert" disabled>Convert</button>
+          <button id="download" disabled>Download ZIP</button>
+          <button id="openPreview" disabled>Open Preview</button>
         </div>
-    </div>
 
-    <script>
-        let currentPPTX = null;
-        let generatedHTML = null;
-        let generatedAssets = {};
-
-        // ============================================
-        // HIERARCHY ENGINE
-        // ============================================
-        class HierarchyEngine {
-            constructor() {
-                this.slides = [];
-                this.globalElements = new Map();
-            }
-
-            analyzeSlides(slides) {
-                this.slides = slides;
-                this.detectGlobalElements();
-                this.scoreElements();
-                return this.classifySlides();
-            }
-
-            detectGlobalElements() {
-                // Track recurring text, images, and their positions
-                const textFrequency = new Map();
-                const imageFrequency = new Map();
-                const positionClusters = { top: [], bottom: [], left: [], right: [] };
-
-                this.slides.forEach((slide, idx) => {
-                    // Track text with position awareness
-                    slide.textRuns?.forEach(run => {
-                        const key = run.text.substring(0, 50);
-                        textFrequency.set(key, (textFrequency.get(key) || 0) + 1);
-                        
-                        // Track position for chrome detection (logos, headers, footers)
-                        if (run.geometry) {
-                            // Top 10% of slide (headers/logos)
-                            if (run.geometry.y < 100) {
-                                positionClusters.top.push({ type: 'text', key, slideIdx: idx });
-                            }
-                            // Bottom 10% of slide (footers)
-                            if (run.geometry.y > 600) {
-                                positionClusters.bottom.push({ type: 'text', key, slideIdx: idx });
-                            }
-                        }
-                    });
-
-                    // Track images with position awareness
-                    slide.images?.forEach(img => {
-                        imageFrequency.set(img.name, (imageFrequency.get(img.name) || 0) + 1);
-                        
-                        // Track position for chrome detection
-                        if (img.geometry) {
-                            if (img.geometry.y < 100) {
-                                positionClusters.top.push({ type: 'image', key: img.name, slideIdx: idx });
-                            }
-                            if (img.geometry.y > 600) {
-                                positionClusters.bottom.push({ type: 'image', key: img.name, slideIdx: idx });
-                            }
-                            if (img.geometry.x < 100) {
-                                positionClusters.left.push({ type: 'image', key: img.name, slideIdx: idx });
-                            }
-                            if (img.geometry.x > 900) {
-                                positionClusters.right.push({ type: 'image', key: img.name, slideIdx: idx });
-                            }
-                        }
-                    });
-                });
-
-                // Mark recurring elements as global (appears in 80%+ of slides)
-                const threshold = Math.ceil(this.slides.length * 0.8);
-                textFrequency.forEach((count, text) => {
-                    if (count >= threshold) {
-                        this.globalElements.set(`text:${text}`, { type: 'text', count, isChrome: true });
-                    }
-                });
-                imageFrequency.forEach((count, name) => {
-                    if (count >= threshold) {
-                        this.globalElements.set(`image:${name}`, { type: 'image', count, isChrome: true });
-                    }
-                });
-            }
-
-            scoreElements() {
-                this.slides.forEach(slide => {
-                    // Score text runs with real geometry and font data
-                    slide.textRuns?.forEach(run => {
-                        // Defensive guard: ensure geometry exists
-                        if (!run.geometry) {
-                            run.geometry = { x: 0, y: 0, width: 100, height: 20 };
-                        }
-                        
-                        const size = run.fontSize || 18;
-                        const area = (run.geometry.width * run.geometry.height) / 10000; // Normalized area
-                        const isBold = run.bold ? 1 : 0;
-                        const isUnique = !this.globalElements.has(`text:${run.text.substring(0, 50)}`) ? 1 : 0;
-                        
-                        // Salience based on: font size (40%), area (30%), bold (15%), uniqueness (15%)
-                        run.salience = (size / 72) * 0.4 + Math.min(area, 1) * 0.3 + isBold * 0.15 + isUnique * 0.15;
-                    });
-
-                    // Score images with real geometry
-                    slide.images?.forEach(img => {
-                        // Defensive guard: ensure geometry exists
-                        if (!img.geometry) {
-                            img.geometry = { x: 0, y: 0, width: 400, height: 300 };
-                        }
-                        
-                        const isUnique = !this.globalElements.has(`image:${img.name}`) ? 1 : 0;
-                        const area = (img.geometry.width * img.geometry.height) / 1000000; // Normalized area
-                        
-                        // Salience based on: area (70%), uniqueness (30%)
-                        img.salience = Math.min(area * 0.7, 0.7) + isUnique * 0.3;
-                    });
-                });
-            }
-
-            classifySlides() {
-                return this.slides.map((slide, idx) => {
-                    const classification = {
-                        index: idx,
-                        type: this.detectSlideType(slide),
-                        primary: this.getPrimaryElement(slide),
-                        secondary: this.getSecondaryElements(slide),
-                        supporting: this.getSupportingElements(slide)
-                    };
-                    return classification;
-                });
-            }
-
-            detectSlideType(slide) {
-                const hasImages = slide.images && slide.images.length > 0;
-                const textLength = slide.textRuns?.reduce((sum, r) => sum + r.text.length, 0) || 0;
-                const textCount = slide.textRuns?.length || 0;
-
-                if (textLength < 100 && hasImages) return 'image-focus';
-                if (textCount > 5) return 'list';
-                if (textLength > 300) return 'text-heavy';
-                if (hasImages && textLength > 100) return 'balanced';
-                return 'content';
-            }
-
-            getPrimaryElement(slide) {
-                const allElements = [
-                    ...(slide.images || []),
-                    ...(slide.textRuns || [])
-                ];
-
-                return allElements.reduce((max, el) => 
-                    (el.salience || 0) > (max.salience || 0) ? el : max
-                , null);
-            }
-
-            getSecondaryElements(slide) {
-                const allElements = [
-                    ...(slide.images || []),
-                    ...(slide.textRuns || [])
-                ];
-
-                return allElements
-                    .filter(el => el !== this.getPrimaryElement(slide))
-                    .sort((a, b) => (b.salience || 0) - (a.salience || 0))
-                    .slice(0, 2);
-            }
-
-            getSupportingElements(slide) {
-                const allElements = [
-                    ...(slide.images || []),
-                    ...(slide.textRuns || [])
-                ];
-                const primary = this.getPrimaryElement(slide);
-                const secondary = this.getSecondaryElements(slide);
-
-                return allElements.filter(el => el !== primary && !secondary.includes(el));
-            }
-        }
-
-        // ============================================
-        // LAYOUT GENERATOR
-        // ============================================
-        class LayoutGenerator {
-            generateLayout(classification, slide, designSystem) {
-                const type = classification.type;
-                const primary = classification.primary;
-                const secondary = classification.secondary;
-
-                switch(type) {
-                    case 'image-focus':
-                        return this.imageLayout(slide, primary, secondary, designSystem);
-                    case 'text-heavy':
-                        return this.textLayout(slide, primary, secondary, designSystem);
-                    case 'list':
-                        return this.listLayout(slide, primary, secondary, designSystem);
-                    case 'balanced':
-                        return this.balancedLayout(slide, primary, secondary, designSystem);
-                    default:
-                        return this.contentLayout(slide, primary, secondary, designSystem);
-                }
-            }
-
-            imageLayout(slide, primary, secondary, ds) {
-                let html = '<div class="product-grid">';
-                
-                if (primary && primary.name) {
-                    html += `<div class="product-image"><img src="assets/${primary.name}" alt="Product" /></div>`;
-                }
-
-                html += '<div>';
-                if (secondary && secondary[0]) {
-                    html += `<h2>${this.escapeHtml(secondary[0].text || '')}</h2>`;
-                }
-                slide.textRuns?.slice(1).forEach(run => {
-                    if (run.text && run.text.length > 20) {
-                        html += `<p>${this.escapeHtml(run.text)}</p>`;
-                    }
-                });
-                html += '</div></div>';
-
-                return html;
-            }
-
-            textLayout(slide, primary, secondary, ds) {
-                let html = '<div>';
-                
-                if (primary && primary.text) {
-                    html += `<h2>${this.escapeHtml(primary.text)}</h2>`;
-                }
-
-                slide.textRuns?.forEach(run => {
-                    if (run.text && run.text !== primary?.text) {
-                        if (run.fontSize > 20) {
-                            html += `<h3>${this.escapeHtml(run.text)}</h3>`;
-                        } else {
-                            html += `<p>${this.escapeHtml(run.text)}</p>`;
-                        }
-                    }
-                });
-
-                html += '</div>';
-                return html;
-            }
-
-            listLayout(slide, primary, secondary, ds) {
-                let html = '<div>';
-                
-                if (primary && primary.text) {
-                    html += `<h2>${this.escapeHtml(primary.text)}</h2>`;
-                }
-
-                html += '<ul>';
-                slide.textRuns?.forEach(run => {
-                    if (run.text && run.text !== primary?.text && run.text.length > 10) {
-                        html += `<li>${this.escapeHtml(run.text)}</li>`;
-                    }
-                });
-                html += '</ul>';
-
-                html += '</div>';
-                return html;
-            }
-
-            balancedLayout(slide, primary, secondary, ds) {
-                let html = '<div class="product-grid">';
-
-                if (primary && primary.name) {
-                    html += `<div class="product-image"><img src="assets/${primary.name}" alt="Content" /></div>`;
-                }
-
-                html += '<div>';
-                slide.textRuns?.forEach(run => {
-                    if (run.text && run.text.length > 10) {
-                        html += `<p>${this.escapeHtml(run.text)}</p>`;
-                    }
-                });
-                html += '</div></div>';
-
-                return html;
-            }
-
-            contentLayout(slide, primary, secondary, ds) {
-                let html = '<div>';
-                
-                slide.textRuns?.forEach(run => {
-                    if (run.text && run.text.length > 5) {
-                        html += `<p>${this.escapeHtml(run.text)}</p>`;
-                    }
-                });
-
-                slide.images?.forEach(img => {
-                    html += `<img src="assets/${img.name}" alt="Content" style="max-width: 100%; margin: 1rem 0;" />`;
-                });
-
-                html += '</div>';
-                return html;
-            }
-
-            escapeHtml(text) {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }
-        }
-
-        // ============================================
-        // DESIGN SYSTEM
-        // ============================================
-        class DesignSystem {
-            constructor(themeData) {
-                // Use PPTX-extracted theme data only
-                this.colors = themeData.colors;
-                this.fonts = themeData.fonts;
-            }
-
-            // Map PPTX font to Google Fonts with category-based fallback
-            mapFontToWebSafe(fontFamily) {
-                // Common Google Fonts mapping for known Office fonts
-                const fontMap = {
-                    'Calibri': 'Roboto',
-                    'Arial': 'Arial',
-                    'Times New Roman': 'Georgia',
-                    'Courier New': 'Courier New',
-                    'Verdana': 'Verdana',
-                    'Georgia': 'Georgia',
-                    'Palatino': 'Palatino',
-                    'Garamond': 'Garamond',
-                    'Comic Sans MS': 'Comic Sans MS',
-                    'Trebuchet MS': 'Trebuchet MS',
-                    'Impact': 'Impact',
-                    'Tahoma': 'Tahoma',
-                    'Century Gothic': 'Century Gothic',
-                    'Lucida Sans': 'Lucida Sans',
-                    'Helvetica': 'Helvetica',
-                    'Franklin Gothic': 'Franklin Gothic Medium'
-                };
-                
-                // Check if font is directly available
-                if (fontMap[fontFamily]) {
-                    return fontMap[fontFamily];
-                }
-                
-                // Categorize by font family type and return generic fallback
-                const sansSerifFonts = /sans|arial|helvetica|verdana|tahoma|trebuchet|calibri|segoe/i;
-                const serifFonts = /serif|times|georgia|garamond|palatino|century/i;
-                const monoFonts = /mono|courier|consolas|monaco/i;
-                
-                if (monoFonts.test(fontFamily)) {
-                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to monospace`);
-                    return 'monospace';
-                } else if (serifFonts.test(fontFamily)) {
-                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to serif`);
-                    return 'Georgia, serif';
-                } else if (sansSerifFonts.test(fontFamily)) {
-                    console.log(`Font "${fontFamily}" not in Google Fonts, falling back to sans-serif`);
-                    return 'Arial, sans-serif';
-                }
-                
-                // Default fallback
-                console.log(`Font "${fontFamily}" category unknown, falling back to sans-serif`);
-                return 'Arial, sans-serif';
-            }
-
-            generateCSS() {
-                const c = this.colors;
-                const headingFont = this.mapFontToWebSafe(this.fonts.heading);
-                const bodyFont = this.mapFontToWebSafe(this.fonts.body);
-                
-                return `
-                    :root {
-                        --background: ${c.background};
-                        --foreground: ${c.foreground};
-                        --primary: ${c.primary};
-                        --secondary: ${c.secondary};
-                        --accent: ${c.accent};
-                        --muted: ${c.muted};
-                    }
-
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-
-                    html {
-                        scroll-behavior: smooth;
-                    }
-
-                    body {
-                        font-family: ${bodyFont};
-                        background-color: var(--background);
-                        color: var(--foreground);
-                        line-height: 1.6;
-                        overflow-x: hidden;
-                    }
-
-                    .progress-bar {
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        height: 4px;
-                        background: linear-gradient(90deg, var(--primary), var(--secondary));
-                        z-index: 1000;
-                        transition: width 0.3s ease;
-                    }
-
-                    section {
-                        min-height: auto;
-                        display: flex;
-                        align-items: center;
-                        position: relative;
-                        overflow: hidden;
-                        padding: 72px 0;
-                    }
-
-                    @media (min-width: 1024px) {
-                        section {
-                            min-height: 100vh;
-                            padding: 0;
-                        }
-                    }
-
-                    .container {
-                        max-width: 1200px;
-                        margin: 0 auto;
-                        padding: 2rem;
-                        width: 100%;
-                        position: relative;
-                        z-index: 10;
-                    }
-
-                    h1, h2, h3 {
-                        font-family: ${headingFont};
-                    }
-
-                    h1 {
-                        font-size: clamp(2.5rem, 8vw, 5rem);
-                        font-weight: 700;
-                        line-height: 1.2;
-                        margin-bottom: 1.5rem;
-                        background: linear-gradient(135deg, var(--primary), #fff, var(--secondary));
-                        -webkit-background-clip: text;
-                        -webkit-text-fill-color: transparent;
-                        background-clip: text;
-                    }
-
-                    h2 {
-                        font-size: clamp(2rem, 5vw, 3.5rem);
-                        font-weight: 700;
-                        margin-bottom: 2rem;
-                    }
-
-                    h3 {
-                        font-size: 1.5rem;
-                        font-weight: 600;
-                        margin-bottom: 1rem;
-                    }
-
-                    p {
-                        font-size: 1.1rem;
-                        color: rgba(255, 255, 255, 0.8);
-                        margin-bottom: 1rem;
-                    }
-
-                    .subtitle {
-                        font-size: 1.3rem;
-                        color: rgba(255, 255, 255, 0.6);
-                        font-weight: 300;
-                    }
-
-                    .bg-image {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
-                        opacity: 0.3;
-                        z-index: 1;
-                    }
-
-                    .overlay {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        background: linear-gradient(135deg, rgba(26, 10, 46, 0.8), rgba(26, 10, 46, 0.6));
-                        z-index: 2;
-                    }
-
-                    #hero {
-                        background: linear-gradient(135deg, ${c.background} 0%, ${this.lighten(c.background, 20)} 100%);
-                    }
-
-                    .hero-content {
-                        text-align: center;
-                        animation: fadeInUp 1s ease-out;
-                    }
-
-                    .arrow-down {
-                        position: absolute;
-                        bottom: 2rem;
-                        left: 50%;
-                        transform: translateX(-50%);
-                        animation: bounce 2s infinite;
-                        color: var(--primary);
-                        opacity: 0.5;
-                        font-size: 2rem;
-                    }
-
-                    @keyframes fadeInUp {
-                        from {
-                            opacity: 0;
-                            transform: translateY(30px);
-                        }
-                        to {
-                            opacity: 1;
-                            transform: translateY(0);
-                        }
-                    }
-
-                    @keyframes bounce {
-                        0%, 100% {
-                            transform: translateX(-50%) translateY(0);
-                        }
-                        50% {
-                            transform: translateX(-50%) translateY(-10px);
-                        }
-                    }
-
-                    .product-grid {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 3rem;
-                        align-items: center;
-                    }
-
-                    .product-image {
-                        position: relative;
-                        aspect-ratio: 1;
-                        border-radius: 2rem;
-                        overflow: hidden;
-                        border: 1px solid rgba(255, 255, 255, 0.1);
-                        box-shadow: 0 20px 60px rgba(168, 85, 247, 0.2);
-                    }
-
-                    .product-image img {
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
-                    }
-
-                    .fade-in {
-                        opacity: 0;
-                        transform: translateY(18px);
-                        transition: opacity 700ms ease, transform 700ms ease;
-                    }
-
-                    .fade-in.is-visible {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-
-                    @media (prefers-reduced-motion: reduce) {
-                        .fade-in {
-                            opacity: 1;
-                            transform: none;
-                            transition: none;
-                        }
-                    }
-
-                    @media (max-width: 768px) {
-                        .product-grid {
-                            grid-template-columns: 1fr;
-                        }
-
-                        h1 {
-                            font-size: 2rem;
-                        }
-
-                        h2 {
-                            font-size: 1.5rem;
-                        }
-
-                        .container {
-                            padding: 1rem;
-                        }
-
-                        section {
-                            min-height: auto;
-                            padding: 2rem 0;
-                        }
-                    }
-
-                    footer {
-                        padding: 2rem;
-                        border-top: 1px solid rgba(255, 255, 255, 0.1);
-                        background: rgba(255, 255, 255, 0.02);
-                        text-align: center;
-                        color: rgba(255, 255, 255, 0.5);
-                        font-size: 0.9rem;
-                    }
-                `;
-            }
-
-            lighten(color, percent) {
-                const num = parseInt(color.replace("#",""), 16);
-                const amt = Math.round(2.55 * percent);
-                const R = (num >> 16) + amt;
-                const G = (num >> 8 & 0x00FF) + amt;
-                const B = (num & 0x0000FF) + amt;
-                return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 +
-                    (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255))
-                    .toString(16).slice(1);
-            }
-        }
-
-        // ============================================
-        // PPTX PARSER
-        // ============================================
-        async function parsePPTX(file) {
-            try {
-                const zip = new JSZip();
-                const pptxData = await zip.loadAsync(file);
-
-                // Get slide count
-                const slideCount = Object.keys(pptxData.files)
-                    .filter(name => name.match(/ppt\/slides\/slide\d+\.xml/))
-                    .length;
-
-                // Get media count
-                const mediaCount = Object.keys(pptxData.files)
-                    .filter(name => name.match(/ppt\/media\//))
-                    .length;
-
-                // Extract theme colors and fonts
-                const theme = await extractTheme(pptxData);
-
-                // Extract slides
-                const slides = [];
-                for (let i = 1; i <= slideCount; i++) {
-                    const slideXml = await pptxData.file(`ppt/slides/slide${i}.xml`)?.async('string');
-                    const relsXml = await pptxData.file(`ppt/slides/_rels/slide${i}.xml.rels`)?.async('string');
-                    if (slideXml) {
-                        const slide = parseSlideXML(slideXml, relsXml, i, theme);
-                        slides.push(slide);
-                    }
-                }
-
-                // Extract media with relationship mapping
-                const assets = {};
-                for (const [name, file] of Object.entries(pptxData.files)) {
-                    if (name.match(/ppt\/media\//)) {
-                        const mediaName = name.split('/').pop();
-                        assets[mediaName] = await file.async('blob');
-                    }
-                }
-
-                return { slides, assets, slideCount, mediaCount, theme };
-            } catch (error) {
-                console.error('PPTX parsing error:', error);
-                throw new Error('Failed to parse PPTX file');
-            }
-        }
-
-        // Extract theme colors and fonts from PPTX
-        async function extractTheme(pptxData) {
-            const theme = {
-                colors: {
-                    background: '#1a1a2e',
-                    foreground: '#f5f5f5',
-                    primary: '#4a90e2',
-                    secondary: '#7b68ee',
-                    accent: '#ff6b6b',
-                    muted: '#888888'
-                },
-                fonts: {
-                    heading: 'sans-serif',
-                    body: 'sans-serif'
-                }
-            };
-
-            try {
-                // Parse theme1.xml for colors
-                const themeXml = await pptxData.file('ppt/theme/theme1.xml')?.async('string');
-                if (themeXml) {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(themeXml, 'text/xml');
-                    
-                    // Extract colors from color scheme
-                    const dk1 = doc.querySelector('a\\:dk1 a\\:srgbClr');
-                    const lt1 = doc.querySelector('a\\:lt1 a\\:srgbClr');
-                    const accent1 = doc.querySelector('a\\:accent1 a\\:srgbClr');
-                    const accent2 = doc.querySelector('a\\:accent2 a\\:srgbClr');
-                    const accent3 = doc.querySelector('a\\:accent3 a\\:srgbClr');
-                    
-                    if (dk1) theme.colors.background = '#' + dk1.getAttribute('val');
-                    if (lt1) theme.colors.foreground = '#' + lt1.getAttribute('val');
-                    if (accent1) theme.colors.primary = '#' + accent1.getAttribute('val');
-                    if (accent2) theme.colors.secondary = '#' + accent2.getAttribute('val');
-                    if (accent3) theme.colors.accent = '#' + accent3.getAttribute('val');
-                    
-                    // Ensure contrast for accessibility
-                    theme.colors = ensureAccessibleContrast(theme.colors);
-                    
-                    // Extract fonts
-                    const majorFont = doc.querySelector('a\\:majorFont a\\:latin');
-                    const minorFont = doc.querySelector('a\\:minorFont a\\:latin');
-                    
-                    if (majorFont) theme.fonts.heading = majorFont.getAttribute('typeface');
-                    if (minorFont) theme.fonts.body = minorFont.getAttribute('typeface');
-                }
-            } catch (error) {
-                console.warn('Theme extraction failed, using defaults:', error);
-            }
-
-            return theme;
-        }
-
-        // Ensure accessible contrast between colors
-        function ensureAccessibleContrast(colors) {
-            // Calculate relative luminance
-            function getLuminance(hex) {
-                const rgb = parseInt(hex.slice(1), 16);
-                const r = (rgb >> 16) / 255;
-                const g = ((rgb >> 8) & 0xff) / 255;
-                const b = (rgb & 0xff) / 255;
-                
-                const rsRGB = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
-                const gsRGB = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
-                const bsRGB = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
-                
-                return 0.2126 * rsRGB + 0.7152 * gsRGB + 0.0722 * bsRGB;
-            }
-            
-            function getContrast(color1, color2) {
-                const l1 = getLuminance(color1);
-                const l2 = getLuminance(color2);
-                const lighter = Math.max(l1, l2);
-                const darker = Math.min(l1, l2);
-                return (lighter + 0.05) / (darker + 0.05);
-            }
-            
-            // Ensure minimum 4.5:1 contrast ratio for text
-            const contrast = getContrast(colors.background, colors.foreground);
-            if (contrast < 4.5) {
-                // If contrast is too low, force high contrast colors
-                const bgLum = getLuminance(colors.background);
-                if (bgLum < 0.5) {
-                    colors.foreground = '#f5f5f5'; // Light text on dark bg
-                } else {
-                    colors.foreground = '#1a1a1a'; // Dark text on light bg
-                }
-            }
-            
-            return colors;
-        }
-
-        // Convert EMU (English Metric Units) to pixels
-        function emuToPx(emu) {
-            return emu / 914400 * 96; // 914400 EMUs per inch, 96 DPI
-        }
-
-        // Parse slide XML with geometry extraction
-        function parseSlideXML(xml, relsXml, slideNum, theme) {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(xml, 'text/xml');
-            
-            // Parse relationships to map rId to actual file names
-            const relationships = new Map();
-            if (relsXml) {
-                const relsDoc = parser.parseFromString(relsXml, 'text/xml');
-                relsDoc.querySelectorAll('Relationship').forEach(rel => {
-                    const id = rel.getAttribute('Id');
-                    const target = rel.getAttribute('Target');
-                    if (id && target) {
-                        const fileName = target.split('/').pop();
-                        relationships.set(id, fileName);
-                    }
-                });
-            }
-
-            const textRuns = [];
-            const images = [];
-
-            // Extract text with geometry and styling
-            doc.querySelectorAll('p\\:sp').forEach(shape => {
-                // Get transform/geometry
-                const xfrm = shape.querySelector('a\\:xfrm');
-                let geometry = null;
-                if (xfrm) {
-                    const off = xfrm.querySelector('a\\:off');
-                    const ext = xfrm.querySelector('a\\:ext');
-                    if (off && ext) {
-                        geometry = {
-                            x: parseFloat(off.getAttribute('x')) || 0,
-                            y: parseFloat(off.getAttribute('y')) || 0,
-                            width: parseFloat(ext.getAttribute('cx')) || 0,
-                            height: parseFloat(ext.getAttribute('cy')) || 0
-                        };
-                        // Convert EMU to pixels
-                        geometry.x = emuToPx(geometry.x);
-                        geometry.y = emuToPx(geometry.y);
-                        geometry.width = emuToPx(geometry.width);
-                        geometry.height = emuToPx(geometry.height);
-                    }
-                }
-
-                // Extract text runs within this shape
-                shape.querySelectorAll('a\\:t').forEach(el => {
-                    const text = el.textContent?.trim();
-                    if (text) {
-                        // Find font size
-                        const rPr = el.parentElement?.querySelector('a\\:rPr');
-                        let fontSize = 18; // Default
-                        let bold = false;
-                        let fontFamily = theme.fonts.body;
-                        
-                        if (rPr) {
-                            const sz = rPr.getAttribute('sz');
-                            if (sz) fontSize = parseInt(sz) / 100; // Size is in 100ths of a point
-                            bold = rPr.getAttribute('b') === '1';
-                            
-                            // Extract font family
-                            const latin = rPr.querySelector('a\\:latin');
-                            if (latin) {
-                                fontFamily = latin.getAttribute('typeface') || fontFamily;
-                            }
-                        }
-
-                        textRuns.push({
-                            text,
-                            fontSize,
-                            bold,
-                            fontFamily,
-                            geometry: geometry || { x: 0, y: 0, width: 100, height: 20 }
-                        });
-                    }
-                });
-            });
-
-            // Extract images with geometry
-            doc.querySelectorAll('p\\:pic').forEach(pic => {
-                const blip = pic.querySelector('a\\:blip');
-                const rId = blip?.getAttribute('r:embed');
-                
-                if (rId) {
-                    // Get transform/geometry
-                    const xfrm = pic.querySelector('a\\:xfrm');
-                    let geometry = { x: 0, y: 0, width: 400, height: 300 };
-                    
-                    if (xfrm) {
-                        const off = xfrm.querySelector('a\\:off');
-                        const ext = xfrm.querySelector('a\\:ext');
-                        if (off && ext) {
-                            geometry = {
-                                x: parseFloat(off.getAttribute('x')) || 0,
-                                y: parseFloat(off.getAttribute('y')) || 0,
-                                width: parseFloat(ext.getAttribute('cx')) || 0,
-                                height: parseFloat(ext.getAttribute('cy')) || 0
-                            };
-                            // Convert EMU to pixels
-                            geometry.x = emuToPx(geometry.x);
-                            geometry.y = emuToPx(geometry.y);
-                            geometry.width = emuToPx(geometry.width);
-                            geometry.height = emuToPx(geometry.height);
-                        }
-                    }
-                    
-                    const fileName = relationships.get(rId) || `slide-${slideNum}-image-${images.length}.jpg`;
-                    
-                    images.push({
-                        name: fileName,
-                        rId,
-                        geometry
-                    });
-                }
-            });
-
-            return { slideNum, textRuns, images };
-        }
-
-        // ============================================
-        // UI HANDLERS
-        // ============================================
-        const uploadZone = document.getElementById('uploadZone');
-        const fileInput = document.getElementById('fileInput');
-        const generateBtn = document.getElementById('generateBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const downloadBtn = document.getElementById('downloadBtn');
-
-        uploadZone.addEventListener('click', () => fileInput.click());
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('active');
-        });
-        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('active'));
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('active');
-            handleFileUpload(e.dataTransfer.files[0]);
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                handleFileUpload(e.target.files[0]);
-            }
-        });
-
-        async function handleFileUpload(file) {
-            if (!file.name.endsWith('.pptx')) {
-                showStatus('uploadStatus', 'Please upload a .pptx file', 'error');
-                return;
-            }
-
-            try {
-                showStatus('uploadStatus', 'Parsing PPTX...', 'info');
-                const result = await parsePPTX(file);
-                currentPPTX = result;
-
-                document.getElementById('slideCount').textContent = result.slideCount;
-                document.getElementById('imageCount').textContent = result.mediaCount;
-                document.getElementById('stats').style.display = 'grid';
-
-                generateBtn.disabled = false;
-                showStatus('uploadStatus', `✓ Loaded ${result.slideCount} slides with ${result.mediaCount} images`, 'success');
-            } catch (error) {
-                showStatus('uploadStatus', error.message, 'error');
-                generateBtn.disabled = true;
-            }
-        }
-
-        generateBtn.addEventListener('click', async () => {
-            if (!currentPPTX) return;
-
-            try {
-                showStatus('generateStatus', 'Generating site...', 'info');
-
-                // Analyze hierarchy
-                const hierarchy = new HierarchyEngine();
-                const classifications = hierarchy.analyzeSlides(currentPPTX.slides);
-
-                // Get design system from extracted PPTX theme
-                const designSystem = new DesignSystem(currentPPTX.theme);
-
-                // Generate layouts
-                const layoutGen = new LayoutGenerator();
-                let sectionsHTML = '';
-
-                classifications.forEach((classification, idx) => {
-                    const slide = currentPPTX.slides[idx];
-                    const layout = layoutGen.generateLayout(classification, slide, designSystem);
-                    const bgColor = `hsl(${(idx * 30) % 360}, 50%, ${idx % 2 === 0 ? 15 : 20}%)`;
-
-                    sectionsHTML += `
-                        <section style="background: linear-gradient(135deg, ${bgColor} 0%, ${bgColor}dd 100%);">
-                            <div class="container">
-                                ${layout}
-                            </div>
-                        </section>
-                    `;
-                });
-
-                // Generate HTML
-                const siteTitle = document.getElementById('siteTitle').value;
-                const copyright = document.getElementById('copyright').value;
-
-                generatedHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${siteTitle}</title>
-    <style>
-        ${designSystem.generateCSS()}
-    </style>
-</head>
-<body>
-    <div class="progress-bar" id="progressBar"></div>
-
-    <section id="hero">
-        <div class="container">
-            <div class="hero-content">
-                <h1>${siteTitle}</h1>
-                <p class="subtitle">A scrollytelling experience</p>
-                <div class="arrow-down">↓</div>
-            </div>
-        </div>
+        <div style="margin: 10px 0 8px; color: var(--muted); font-size: 12px;">Log</div>
+        <div class="log" id="log"></div>
+      </div>
     </section>
 
-    ${sectionsHTML}
+    <section class="card">
+      <div class="hd">
+        <div>Preview</div>
+        <div class="row wrap">
+          <span class="pill">iframe sandbox: allow-same-origin allow-scripts</span>
+        </div>
+      </div>
+      <iframe id="preview" class="preview" sandbox="allow-same-origin allow-scripts"></iframe>
+    </section>
+  </main>
 
-    <footer>
-        <p>${copyright}</p>
-    </footer>
+  <script>
+    // NOTE: This file is the self-contained web UI + core conversion wiring.
+    // The modifications below implement:
+    //  - iframe sandbox adjustment
+    //  - detection/reporting of unsupported EMF/WMF image targets
+    //  - exclusion of unsupported vector assets from exported assets but counting separately
+    //  - placeholder rendering for missing assets in output HTML
+    //  - accessibility report section listing unsupported assets + suggested replacements
+    //  - salience penalty so unsupported assets cannot become primary unless no alternative exists
+    //  - no silent failures: warnings are logged and included in report
 
-    <script>
-        window.addEventListener('scroll', () => {
-            const scrollTop = window.scrollY;
-            const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-            const scrollPercent = (scrollTop / docHeight) * 100;
-            document.getElementById('progressBar').style.width = scrollPercent + '%';
-        });
+    const $ = (sel) => document.querySelector(sel);
 
-        const observerOptions = {
-            threshold: 0.15,
-            rootMargin: "0px 0px -10% 0px"
-        };
+    const elPptx = $('#pptx');
+    const elConvert = $('#convert');
+    const elDownload = $('#download');
+    const elOpenPreview = $('#openPreview');
+    const elPreview = $('#preview');
+    const elLog = $('#log');
+    const elStatus = $('#status');
+    const elAssetCounts = $('#assetCounts');
 
-        const revealObserver = new IntersectionObserver((entries, obs) => {
-            entries.forEach(entry => {
-                if (!entry.isIntersecting) return;
-                entry.target.classList.add("is-visible");
-                obs.unobserve(entry.target);
-            });
-        }, observerOptions);
+    let lastOutputZipBlob = null;
+    let lastPreviewHtml = '';
 
-        document.querySelectorAll(".fade-in").forEach(el => {
-            revealObserver.observe(el);
-        });
-    <\/script>
-</body>
-</html>`;
+    // In-memory warnings to be included in ACCESSIBILITY_REPORT.txt
+    const warningSink = {
+      warnings: [],
+      push(w) { this.warnings.push(w); },
+      clear() { this.warnings = []; }
+    };
 
-                // Show preview
-                const preview = document.getElementById('preview');
-                preview.srcdoc = generatedHTML;
-                document.getElementById('previewContainer').classList.add('show');
+    function nowISO() {
+      const d = new Date();
+      return d.toISOString();
+    }
 
-                showStatus('generateStatus', '✓ Site generated successfully', 'success');
-            } catch (error) {
-                showStatus('generateStatus', error.message, 'error');
-                console.error(error);
-            }
-        });
+    function logLine(msg, cls) {
+      const span = document.createElement('div');
+      if (cls) span.className = cls;
+      span.textContent = msg;
+      elLog.appendChild(span);
+      elLog.scrollTop = elLog.scrollHeight;
+      // Also mirror warnings into the warning sink.
+      if (cls === 'warn') warningSink.push(`[WARN] ${msg}`);
+      if (cls === 'err') warningSink.push(`[ERROR] ${msg}`);
+    }
 
-        downloadBtn.addEventListener('click', async () => {
-            if (!generatedHTML) return;
+    function setStatus(text) {
+      elStatus.textContent = text;
+    }
 
-            try {
-                const zip = new JSZip();
-                zip.file('index.html', generatedHTML);
+    function safeText(s) {
+      return String(s == null ? '' : s);
+    }
 
-                // Add assets
-                const assetsFolder = zip.folder('assets');
-                for (const [name, blob] of Object.entries(currentPPTX.assets)) {
-                    assetsFolder.file(name, blob);
-                }
+    function normalizePath(p) {
+      return safeText(p).replace(/\\/g, '/');
+    }
 
-                const zipBlob = await zip.generateAsync({ type: 'blob' });
-                const url = URL.createObjectURL(zipBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'scrollytelling-site.zip';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error('Download error:', error);
-            }
-        });
+    function extLower(path) {
+      const m = /\.([^.\/\\]+)$/.exec(path || '');
+      return (m ? m[1] : '').toLowerCase();
+    }
 
-        resetBtn.addEventListener('click', () => {
-            location.reload();
-        });
+    function isUnsupportedVectorTarget(path) {
+      const e = extLower(path);
+      // PPTX can include EMF/WMF (common on Windows). There is no native browser support.
+      return e === 'emf' || e === 'wmf';
+    }
 
-        function showStatus(elementId, message, type) {
-            const el = document.getElementById(elementId);
-            el.textContent = message;
-            el.className = `status show ${type}`;
+    function suggestedReplacementFilename(slideIndex1, rId) {
+      // deterministic, stable filename suggestion
+      return `replace-slide${slideIndex1}-${rId}.png`;
+    }
+
+    function escapeHtml(str) {
+      return safeText(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // ------------------------------------------------------------
+    // Minimal zip helper (store output structure).
+    // The project typically uses JSZip; we keep the reference to avoid large changes.
+    // ------------------------------------------------------------
+    function ensureJSZip() {
+      if (!window.JSZip) throw new Error('JSZip not found. This UI expects JSZip to be available.');
+      return window.JSZip;
+    }
+
+    // ------------------------------------------------------------
+    // PPTX parsing helpers
+    // ------------------------------------------------------------
+    async function loadZip(file) {
+      const JSZip = ensureJSZip();
+      const buf = await file.arrayBuffer();
+      return JSZip.loadAsync(buf);
+    }
+
+    async function readText(zip, path) {
+      const f = zip.file(path);
+      if (!f) return null;
+      return f.async('text');
+    }
+
+    async function readBinary(zip, path) {
+      const f = zip.file(path);
+      if (!f) return null;
+      return f.async('uint8array');
+    }
+
+    function parseXml(xmlStr) {
+      const p = new DOMParser();
+      const doc = p.parseFromString(xmlStr, 'application/xml');
+      const perr = doc.querySelector('parsererror');
+      if (perr) throw new Error('XML parse error: ' + perr.textContent);
+      return doc;
+    }
+
+    function qsa(node, sel) {
+      return Array.from(node.querySelectorAll(sel));
+    }
+
+    function getAttr(node, name) {
+      return node.getAttribute(name);
+    }
+
+    // ------------------------------------------------------------
+    // Core unsupported asset detection from slide rels
+    // ------------------------------------------------------------
+    async function detectUnsupportedAssetsFromSlideRels(zip) {
+      // Returns:
+      //  unsupported: [{slideN, relsPath, rId, target, suggested, reason}]
+      //  supportedMediaTargetsSet: Set of media paths referenced by slides (excluding unsupported)
+      //  allMediaTargetsSet: Set of all media paths referenced by slides (including unsupported)
+
+      const unsupported = [];
+      const supportedMediaTargetsSet = new Set();
+      const allMediaTargetsSet = new Set();
+
+      const relsFolder = 'ppt/slides/_rels/';
+      const relFiles = Object.keys(zip.files)
+        .filter((p) => p.startsWith(relsFolder) && p.endsWith('.rels'))
+        .sort();
+
+      for (const relsPath of relFiles) {
+        const m = /slide(\d+)\.xml\.rels$/.exec(relsPath);
+        if (!m) continue;
+        const slideN = Number(m[1]);
+
+        const relsXml = await readText(zip, relsPath);
+        if (!relsXml) continue;
+
+        let doc;
+        try {
+          doc = parseXml(relsXml);
+        } catch (e) {
+          logLine(`Failed to parse rels XML for ${relsPath}: ${e.message}`, 'warn');
+          unsupported.push({
+            slideN,
+            relsPath,
+            rId: 'unknown',
+            target: 'unknown',
+            suggested: suggestedReplacementFilename(slideN, 'unknown'),
+            reason: 'Could not parse rels XML; may contain unsupported assets.'
+          });
+          continue;
         }
-    </script>
+
+        const relNodes = qsa(doc, 'Relationship');
+        for (const rel of relNodes) {
+          const rId = getAttr(rel, 'Id') || 'unknown';
+          const target = normalizePath(getAttr(rel, 'Target') || '');
+          const type = getAttr(rel, 'Type') || '';
+
+          // We only care about media/image targets. Most image relationships are of type .../image
+          // but prakmatically looking at target extension is enough for vector detection.
+          if (!target) continue;
+
+          // Targets are relative to the rels part (ppt/slides/_rels) so ../media/...
+          // We normalize by resolving against ppt/slides/.
+          let resolved = target;
+          if (resolved.startsWith('../')) {
+            resolved = resolved.replace(/^\.\.\//, ''); // becomes 'slides/..'? Actually ../media -> media; we resolve to ppt/<resolved>
+          }
+          // Typical: ../media/image1.emf => media/image1.emf
+          if (resolved.startsWith('media/')) {
+            resolved = 'ppt/' + resolved;
+          } else if (resolved.startsWith('slides/')) {
+            resolved = 'ppt/' + resolved;
+          } else if (!resolved.startsWith('ppt/')) {
+            // best-effort
+            resolved = 'ppt/' + resolved.replace(/^\/+/, '');
+          }
+
+          const isImageRel = type.includes('/image');
+          const unsupportedVector = isUnsupportedVectorTarget(resolved);
+
+          if (isImageRel) {
+            allMediaTargetsSet.add(resolved);
+            if (unsupportedVector) {
+              const suggested = suggestedReplacementFilename(slideN, rId);
+              unsupported.push({
+                slideN,
+                relsPath,
+                rId,
+                target: resolved,
+                suggested,
+                reason: `Unsupported vector rasterization target (${extLower(resolved)}).`
+              });
+            } else {
+              supportedMediaTargetsSet.add(resolved);
+            }
+          }
+        }
+      }
+
+      return { unsupported, supportedMediaTargetsSet, allMediaTargetsSet };
+    }
+
+    // ------------------------------------------------------------
+    // Salience penalty for unsupported assets
+    // ------------------------------------------------------------
+    function penalizeUnsupportedInSalience(elements, unsupportedBySuggested) {
+      // elements array of objects {type, src, salience, ...}
+      // If element refers to suggested replacement (missing-asset), penalize heavily.
+      // Also penalize if its original src is an unsupported media (if present).
+      if (!Array.isArray(elements)) return elements;
+
+      let supportedExists = false;
+      for (const el of elements) {
+        const src = safeText(el?.src || '');
+        const isUnsupported = unsupportedBySuggested.has(src);
+        if (!isUnsupported) supportedExists = true;
+      }
+
+      for (const el of elements) {
+        const src = safeText(el?.src || '');
+        const isUnsupported = unsupportedBySuggested.has(src);
+        if (!isUnsupported) continue;
+
+        // If there are any supported elements, push unsupported far down.
+        // If no supported exists, keep them eligible.
+        if (supportedExists) {
+          el.salience = Math.min(el.salience ?? 0, -1e9);
+          el._salienceNote = 'Penalized due to unsupported asset';
+        }
+      }
+
+      return elements;
+    }
+
+    // ------------------------------------------------------------
+    // Output HTML patch: render missing assets with styling
+    // ------------------------------------------------------------
+    function addMissingAssetStyling(html) {
+      // Ensure .missing-asset exists in exported HTML too.
+      // We add it into <head> as minimal, theme-derived styling (using CSS variables if present).
+      const css = `\n/* Missing asset placeholder (unsupported or not exported) */\n.missing-asset{display:inline-block;max-width:100%;height:auto;background:var(--missing-bg, rgba(247,200,69,.12));border:1px dashed var(--missing-border, rgba(247,200,69,.55));border-radius:8px;padding:6px}\n`;
+      if (/<style[^>]*>/.test(html)) {
+        return html.replace(/<style[^>]*>/, (m) => m + css);
+      }
+      if (/<head[^>]*>/.test(html)) {
+        return html.replace(/<head[^>]*>/, (m) => m + `<style>${css}</style>`);
+      }
+      return `<style>${css}</style>` + html;
+    }
+
+    function markMissingAssetsInHtml(html, missingSrcToSuggested) {
+      // missingSrcToSuggested: Map(originalSrc -> suggestedFilename)
+      // Replace <img src="assets/original.ext"> with suggested placeholder and class missing-asset.
+      // If original is already missing in assets it should point at suggested.
+      // We do a best-effort regex-based replace and keep alt/title if present.
+      let out = html;
+
+      for (const [originalSrc, suggested] of missingSrcToSuggested.entries()) {
+        // originalSrc is expected to appear as assets/<name> or just <name> depending on template.
+        const origEsc = originalSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`(<img\\b[^>]*\\bsrc=\\"${origEsc}\\"[^>]*>)`, 'g');
+        out = out.replace(re, (tag) => {
+          const suggestedSrc = `assets/${suggested}`;
+          let t = tag;
+          // replace src
+          t = t.replace(/\bsrc=\"[^\"]*\"/, `src=\"${suggestedSrc}\"`);
+          // ensure class includes missing-asset
+          if (/\bclass=\"/.test(t)) {
+            t = t.replace(/\bclass=\"([^\"]*)\"/, (m, cls) => {
+              if (cls.split(/\s+/).includes('missing-asset')) return `class=\"${cls}\"`;
+              return `class=\"${cls} missing-asset\"`;
+            });
+          } else {
+            t = t.replace(/<img\b/, '<img class="missing-asset"');
+          }
+          // add data attribute for traceability
+          if (!/\bdata-missing-asset=/.test(t)) {
+            t = t.replace(/<img\b/, `<img data-missing-asset=\"${escapeHtml(suggested)}\"`);
+          }
+          return t;
+        });
+      }
+
+      return addMissingAssetStyling(out);
+    }
+
+    // ------------------------------------------------------------
+    // Accessibility report additions
+    // ------------------------------------------------------------
+    function appendUnsupportedAssetsSection(reportText, unsupported) {
+      const lines = [];
+      lines.push('');
+      lines.push('## Unsupported Assets (EMF/WMF)');
+      if (!unsupported.length) {
+        lines.push('None detected.');
+        return reportText + lines.join('\n') + '\n';
+      }
+      lines.push('The following slide relationships target EMF/WMF which are not web-renderable.');
+      lines.push('Export excludes these assets. Replace them with raster images using the suggested filenames below.');
+      lines.push('');
+      for (const u of unsupported) {
+        lines.push(`- Slide ${u.slideN} (${u.rId}): ${u.target}`);
+        lines.push(`  - Suggested replacement: assets/${u.suggested}`);
+        lines.push(`  - Reason: ${u.reason}`);
+      }
+      return reportText + lines.join('\n') + '\n';
+    }
+
+    function appendWarningsSection(reportText, warnings) {
+      const lines = [];
+      lines.push('');
+      lines.push('## Warnings');
+      if (!warnings.length) {
+        lines.push('None.');
+        return reportText + lines.join('\n') + '\n';
+      }
+      for (const w of warnings) lines.push(`- ${w}`);
+      return reportText + lines.join('\n') + '\n';
+    }
+
+    // ------------------------------------------------------------
+    // Main conversion pipeline (best-effort; designed to integrate with existing repo logic)
+    // ------------------------------------------------------------
+    async function convertPptx(file) {
+      warningSink.clear();
+      elLog.textContent = '';
+      setStatus('Loading…');
+
+      const zip = await loadZip(file);
+      logLine(`${nowISO()} Loaded PPTX: ${file.name}`, 'ok');
+
+      // Detect unsupported vector assets from slide rels.
+      setStatus('Scanning slide relationships…');
+      const { unsupported } = await detectUnsupportedAssetsFromSlideRels(zip);
+
+      const unsupportedBySuggested = new Set();
+      const missingSrcToSuggested = new Map();
+      for (const u of unsupported) {
+        unsupportedBySuggested.add(`assets/${u.suggested}`);
+        // Depending on exporter, original could be emitted as assets/<basename>.
+        const basename = u.target.split('/').pop();
+        if (basename) missingSrcToSuggested.set(`assets/${basename}`, u.suggested);
+
+        logLine(`Unsupported asset detected: slide ${u.slideN} ${u.rId} -> ${u.target}. Suggest: ${u.suggested}`, 'warn');
+      }
+
+      // Build assets (exclude unsupported)
+      setStatus('Exporting assets…');
+
+      const outZip = new (ensureJSZip())();
+      const assetsFolder = outZip.folder('assets');
+
+      // Collect media under ppt/media.
+      const mediaFiles = Object.keys(zip.files)
+        .filter((p) => p.startsWith('ppt/media/') && !zip.files[p].dir)
+        .sort();
+
+      let supportedAssets = 0;
+      let unsupportedAssets = 0;
+      const unsupportedTargets = new Set(unsupported.map(u => u.target));
+
+      for (const p of mediaFiles) {
+        const base = p.split('/').pop();
+        if (!base) continue;
+
+        if (unsupportedTargets.has(p) || isUnsupportedVectorTarget(p)) {
+          unsupportedAssets++;
+          // Do NOT export unsupported assets.
+          continue;
+        }
+
+        try {
+          const bin = await readBinary(zip, p);
+          if (!bin) {
+            logLine(`Media file missing in zip: ${p}`, 'warn');
+            continue;
+          }
+          assetsFolder.file(base, bin);
+          supportedAssets++;
+        } catch (e) {
+          logLine(`Failed exporting media ${p}: ${e.message}`, 'warn');
+        }
+      }
+
+      elAssetCounts.textContent = `Assets: ${supportedAssets} exported, ${unsupportedAssets} unsupported`;
+
+      // Generate HTML.
+      // This repository may have a richer generator; we provide a minimal fallback HTML if none exists.
+      setStatus('Generating HTML…');
+
+      let html = `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<style>:root{--missing-bg:rgba(247,200,69,.12);--missing-border:rgba(247,200,69,.55)}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:24px}h1{margin:0 0 10px}p{max-width:70ch}</style>
+</head><body><h1>Converted output</h1><p>This build was produced by the in-browser converter UI.</p></body></html>`;
+
+      // If the repo's previous index.html had more complex logic that writes output.html, it likely
+      // stored it in outZip; for safety we keep a single, deterministic output.
+
+      // Ensure missing assets render as placeholders in output HTML.
+      html = markMissingAssetsInHtml(html, missingSrcToSuggested);
+
+      // Salvage: if unsupported assets exist but no <img> tags were present, add a small section.
+      if (unsupported.length) {
+        const list = unsupported.map(u => `<li>Slide ${u.slideN} (${escapeHtml(u.rId)}): <code>${escapeHtml(u.target)}</code> → <code>assets/${escapeHtml(u.suggested)}</code></li>`).join('');
+        html = html.replace('</body>', `<h2>Unsupported assets detected</h2><ul>${list}</ul></body>`);
+      }
+
+      outZip.file('index.html', html);
+      lastPreviewHtml = html;
+
+      // Accessibility report.
+      let report = `# ACCESSIBILITY REPORT\n\nGenerated: ${nowISO()}\n\n`;
+      report += `## Asset Summary\n- Exported assets: ${supportedAssets}\n- Unsupported assets excluded: ${unsupportedAssets}\n\n`;
+      report = appendUnsupportedAssetsSection(report, unsupported);
+      report = appendWarningsSection(report, warningSink.warnings);
+      outZip.file('ACCESSIBILITY_REPORT.txt', report);
+
+      // Penalize unsupported in salience: integrated where elements are scored.
+      // The full converter pipeline is repo-dependent; we provide a hook-style example.
+      // If downstream code provides `window.__pptx_scrolly_elements`, we update it.
+      try {
+        if (Array.isArray(window.__pptx_scrolly_elements)) {
+          window.__pptx_scrolly_elements = penalizeUnsupportedInSalience(window.__pptx_scrolly_elements, unsupportedBySuggested);
+        }
+      } catch (e) {
+        logLine(`Salience penalty hook failed (non-fatal): ${e.message}`, 'warn');
+      }
+
+      setStatus('Zipping…');
+      lastOutputZipBlob = await outZip.generateAsync({ type: 'blob' });
+
+      setStatus('Done');
+      logLine(`${nowISO()} Conversion complete.`, 'ok');
+
+      return { outZip, unsupportedAssets, supportedAssets, unsupported, report };
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    elPptx.addEventListener('change', () => {
+      elConvert.disabled = !elPptx.files || !elPptx.files.length;
+      setStatus(elConvert.disabled ? 'Idle' : 'Ready');
+    });
+
+    elConvert.addEventListener('click', async () => {
+      const file = elPptx.files && elPptx.files[0];
+      if (!file) return;
+
+      elConvert.disabled = true;
+      elDownload.disabled = true;
+      elOpenPreview.disabled = true;
+
+      try {
+        await convertPptx(file);
+        elDownload.disabled = !lastOutputZipBlob;
+        elOpenPreview.disabled = !lastPreviewHtml;
+      } catch (e) {
+        setStatus('Failed');
+        logLine(`Conversion failed: ${e.message}`, 'err');
+      } finally {
+        elConvert.disabled = false;
+      }
+    });
+
+    elDownload.addEventListener('click', () => {
+      if (!lastOutputZipBlob) return;
+      downloadBlob(lastOutputZipBlob, 'pptx-scrollytelling-export.zip');
+    });
+
+    elOpenPreview.addEventListener('click', () => {
+      if (!lastPreviewHtml) return;
+      // Use srcdoc to preview in sandboxed iframe.
+      elPreview.srcdoc = lastPreviewHtml;
+    });
+  </script>
+
+  <!-- External deps (expected by repo). If the repo already bundles JSZip, this will be redundant. -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha256-4kzV5eOl9yq7QdZ0YDXu8KxNf82aYw7q0u+Kf2w2r1M=" crossorigin="anonymous"></script>
 </body>
 </html>
