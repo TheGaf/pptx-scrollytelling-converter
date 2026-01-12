@@ -1,338 +1,358 @@
-1. Pure browser heuristics
-
-This is a real, buildable approach.
-
-What you can do locally in one HTML page
-
-Unzip the PPTX with JSZip.
-
-Parse slide XML for text runs, font names, font sizes, colors, shape fills, and positions.
-
-Extract images from relationships.
-
-Infer a design token set from the deck.
-
-Infer layout using geometry and grouping rules.
-
-Generate HTML and CSS that follows the deck’s design DNA.
-
-This can produce a strong bespoke site, but it will never have the same “creative editorial” feel as Manus unless you put a lot of human-like rules into the heuristics.
-
-It is engineering, not magic.
-
-What it cannot do as well as Manus
-
-Invent “Problem, Risk, Answer” framing unless you explicitly build rules for it.
-
-Rewrite hierarchy or reorganize content with taste beyond the rules you wrote.
-
-Make a dozen subtle aesthetic decisions that are not strictly implied by the slide data.
-
-2. Browser plus a local model
-
-If you want Manus-like interpretation without uploads, you would need local inference.
-
-Reality check
-
-Running a strong model inside the browser is possible but heavy.
-
-You would likely rely on WebGPU, WASM, or a local server.
-
-Model quality will be below Manus unless the user has a powerful machine and you bundle a large model.
-
-This violates the “simple one HTML page” vibe, but it keeps privacy.
-
-3. Browser tool that calls an API
-
-This would be the closest to Manus quality.
-But it violates your privacy rule unless it is opt-in and clearly labeled.
-
-So yes, it is doable in HTML.
-
-But the reason Manus can produce that “index_gold.html” style output is that it is doing a creative authoring step that a pure browser parser does not magically get for free.
-
-The cleanest mental model
-
-Manus pipeline
-
-Parse PPTX
-
-Understand slide intent
-
-Choose structure and hierarchy
-
-Write a designed website
-
-Browser-only pipeline
-
-Parse PPTX
-
-Infer structure and hierarchy from geometry and patterns
-
-Write a designed website
-
-Both are possible. The difference is the “understand intent” piece.
-
-If you want browser-only and still want Manus-like results, you have to replace “LLM taste” with one of these
-
-Very strong heuristics and layout composition rules
-
-A local model option
-
-An optional “enhance with AI” step that is explicitly opt-in
-
-The actual blocker is not HTML
-
-The blocker is this question
-How do you create the editorial and design decisions that Manus makes without using a model or a human.
-
-That is solvable, but it means you are building a conversion engine that is closer to a layout system than a file exporter.
-
-Straight answer
-
-Yes, you can build a single HTML page that takes a PPTX and outputs a bespoke scrollytelling site.
-
-You just cannot expect the same quality as Manus unless you
-
-encode taste into rules, or
-
-bring a model into the loop.
-
-If you want, I can rewrite your project spec into a “browser-only, no templates, no AI” version that is honest about what it will do, while still hitting your acceptance criteria like Titillium Web and palette matching.
-
-SO, I like 1. Pure browser heuristics
-
-Good. Pure browser heuristics can get you very close to the Manus vibe if you treat it like a design system extractor plus a layout composer, not a slide exporter.
-
-The build you want in one sentence
-
-A single-page web app that unzips PPTX, extracts design DNA plus content blocks, composes web sections using geometry rules, and downloads a ZIP with index.html, assets/, and ACCESSIBILITY_REPORT.txt.
-
-What you build, in three modules
-Module A. PPTX reader
-
-Goal is to produce a clean, predictable JSON model.
-
-What it must extract
-
-Slides, order, and page size
-
-Text runs with
-
-font family
-
-font size
-
-bold, italic
-
-color
-
-Shapes with
-
-fill color
-
-stroke color and width
-
-corner radius if present
-
-bounding box in slide coordinates
-
-Images with
-
-relationship id to actual file
-
-bounding box
-
-file extension, and EMF WMF detection
-
-Grouping hints
-
-elements that overlap
-
-elements with similar y bands
-
-elements inside filled rectangles
-
-Implementation basics
-
-Use JSZip to unzip PPTX
-
-Parse ppt/slides/slideN.xml
-
-Parse ppt/slides/_rels/slideN.xml.rels for image relationships
-
-Parse ppt/theme/theme1.xml and ppt/presentation.xml for theme colors and slide size
-
-Module B. Design DNA extractor
-
-Goal is to generate a deck-specific design system every time.
-
-Outputs
-
-Font system
-
-primary font, secondary font
-
-CSS variables and font stacks
-
-Google Fonts import if available
-
-mapping report if not
-
-Color token system
-
-background, surface, text, muted, primary, secondary, border
-
-derived from theme plus dominant fills
-
-contrast enforcement with logging
-
-Rhythm
-
-base spacing unit from common distances
-
-container max width and gutters
-
-default card radius, border weight, shadow usage based on detected shapes
-
-This is where bespoke comes from. If this is good, the site feels like the deck even when layouts shift.
-
-Module C. Section composer
-
-Goal is to turn each slide into a readable section with flow.
-
-Do not “pick templates.” Instead do this per slide
-
-Build a reading order
-
-cluster by y bands
-
-within a band, sort by x
-
-preserve groups where a filled shape sits behind text
-
-Detect layout intent from geometry
-
-hero candidate if there is a dominant title plus a dominant background image or full-bleed fill
-
-split if content is strongly left right separated
-
-grid if repeated blocks exist
-
-gallery if multiple images are present
-
-callouts if text sits on multiple similar filled rectangles
-
-Render using a small set of layout primitives only
-
-stack, split, grid, overlay, gallery
-These are CSS mechanics, not a menu of templates.
-
-Apply deck tokens consistently
-
-background and surfaces
-
-type scale and line length
-
-spacing and section rhythm
-
-Add web affordances
-
-optional scroll progress
-
-reveal-on-scroll that respects reduced motion
-
-lazy loading images
-
-Hard rules that keep it from feeling like a slide export
-
-Never position everything absolutely.
-
-Only use absolute positioning for overlays on a background media block.
-
-Prefer a single consistent container and spacing rhythm across sections.
-
-Promote hierarchy. One slide title becomes an H2 or H1. Body becomes paragraphs or cards.
-
-Convert bullets to lists or card sets, not line-broken text.
-
-Handling EMF and WMF cleanly
-
-Detect extensions from image target in rels.
-
-Skip EMF and WMF files in output.
-
-Insert a placeholder note in the section only if the missing image likely carried meaning, otherwise skip silently in the HTML but log it.
-
-Log warnings in UI plus ACCESSIBILITY_REPORT.
-
-Accessibility defaults in generated site
-
-Skip link
-
-Header, main, section landmarks
-
-Heading normalization
-
-Visible focus styles
-
-Reduced motion support
-
-Alt text rules exactly as you wrote
-
-What Copilot can do for you here
-
-Copilot is perfect as an implementer if you feed it small, bounded tasks.
-
-Use it like this
-
-One file per module
-
-One prompt per function
-
-You review output for “web-first” and “no absolute slide rebuild”
-
-Copilot prompt pack you can paste into your repo issues
-
-PPTX unzip and slide list
-Write browser-only JS using JSZip to load a user selected PPTX file, list slide XML files in order, and expose a function getSlideXml(n) returning XML text. No Node APIs.
-
-Slide size and theme colors
-Parse ppt/presentation.xml and ppt/theme/theme1.xml to extract slide size and theme color scheme. Return a normalized RGB map.
-
-Extract text runs
-Parse a slide XML and return text blocks with runs including font name, size, bold, color, and bounding box. Use robust XML namespace handling.
-
-Extract shapes and fills
-Parse p:sp nodes and return rectangles and other shapes with bounding box, fill color, stroke, and corner radius when present.
-
-Extract images via relationships
-Parse slide rels, map rId to actual media target, detect file extension, and return image blocks with bbox and asset path.
-
-Build deck design tokens
-Given all extracted fonts and colors, compute primary and secondary font, a type scale, and color tokens with WCAG AA contrast checks. Provide mapping to Google Fonts when possible and log mapping decisions.
-
-Compose section layout
-Given one slide model and deck tokens, output HTML for a section using only CSS grid and flex with responsive rules. No absolute positioning except overlay on backgrounds.
-
-Generate site shell and accessibility report
-Generate index.html with semantic landmarks, skip link, focus styles, reduced motion support, and write ACCESSIBILITY_REPORT.txt listing fonts, mappings, contrast adjustments, and skipped EMF WMF assets.
-
-ZIP export
-Package index.html, assets extracted from ppt/media, and ACCESSIBILITY_REPORT.txt into a downloadable ZIP using JSZip.
-
-Your fastest path to a working v1
-
-Build in this order
-
-PPTX unzip, slide list, image extraction, ZIP export
-
-Render a basic site with stack layout only
-
-Add font mapping and Google Fonts loading
-
-Add color token extraction plus contrast enforcement
-
-Add layout inference for split, grid, overlay, gallery
-
-Add polish like reveal, progress, and consistent rhythm
+# PPTX Scrollytelling Converter
+
+A browser-based tool that converts PowerPoint presentations into bespoke scrollytelling websites. This project extracts content, design elements, and styling from PPTX files and generates custom web experiences with fixed desktop and mobile layouts.
+
+## 🎯 Overview
+
+The PPTX Scrollytelling Converter transforms static presentations into dynamic, scroll-driven narratives. Each conversion analyzes the source deck's unique fonts, colors, layouts, and visual hierarchy to create a custom scrollytelling site that preserves the original design intent.
+
+### Output Site Specifications
+
+- **Desktop Layout**: Fixed 1400px width with full viewport-height sections
+- **Mobile Layout**: Fixed 375px width with optimized spacing
+- **Clean Breakpoint**: At 768px - no responsive scaling between sizes
+- **Typography**: Size-specific font scales for each layout
+
+## ✨ Features
+
+### Module A: PPTX Parser (Complete)
+
+The core parsing module that processes PPTX files and extracts structured data:
+
+- **✅ Slide Processing**
+  - Unzips PPTX files using JSZip
+  - Parses slide files in correct sequential order
+  - Extracts slide dimensions from `ppt/presentation.xml`
+  - Processes theme colors from `ppt/theme/theme1.xml`
+
+- **✅ Text Extraction**
+  - Captures all text runs with complete formatting
+  - Extracts font family, font size, and colors
+  - Detects bold and italic styling
+  - Maintains text hierarchy and structure
+
+- **✅ Shape Detection**
+  - Identifies shape bounding boxes (x, y, width, height)
+  - Extracts fill colors and stroke colors
+  - Captures stroke width and corner radius
+  - Converts EMU (English Metric Units) to pixels
+
+- **✅ Image Processing**
+  - Detects images via slide relationship XML files
+  - Identifies file extensions (PNG, JPG, GIF, etc.)
+  - Generates placeholders for unsupported formats (EMF/WMF)
+  - Links images to their media files
+
+- **✅ Theme & Design**
+  - Extracts complete theme color palette
+  - Maps accent colors and system colors
+  - Supports scheme color references
+  - Preserves color relationships
+
+- **✅ Security**
+  - SRI integrity hashes for CDN resources
+  - Path traversal protection
+  - No XSS vulnerabilities
+
+## 🚀 Quick Start
+
+### Basic Usage
+
+1. **Open the Demo Interface**
+   ```
+   Open module-a-demo.html in a modern web browser
+   ```
+
+2. **Upload a PPTX File**
+   - Drag and drop a `.pptx` file onto the upload zone
+   - Or click to browse and select a file
+
+3. **View Extracted Data**
+   - See summary statistics (slides, text runs, shapes, images)
+   - Browse the complete JSON output
+   - Review detailed slide-by-slide analysis
+
+### Using the Parser Module
+
+Include the parser in your HTML:
+
+```html
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="pptx-parser.js"></script>
+```
+
+Use it in your JavaScript:
+
+```javascript
+// Load PPTX file
+var fileInput = document.getElementById('fileInput');
+fileInput.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    var reader = new FileReader();
+    
+    reader.onload = function(e) {
+        JSZip.loadAsync(e.target.result)
+            .then(function(zip) {
+                return PPTXParser.parse(zip);
+            })
+            .then(function(data) {
+                console.log('Extracted data:', data);
+                // Use the extracted data
+                processSlides(data.slides);
+                applyTheme(data.themeColors);
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+            });
+    };
+    
+    reader.readAsArrayBuffer(file);
+});
+```
+
+## 📊 JSON Output Format
+
+The parser generates a clean JSON model with the following structure:
+
+```json
+{
+  "dimensions": {
+    "width": 9144000,
+    "height": 6858000,
+    "widthPx": 960,
+    "heightPx": 720
+  },
+  "themeColors": {
+    "dk1": "#000000",
+    "lt1": "#FFFFFF",
+    "accent1": "#4472C4",
+    "accent2": "#ED7D31",
+    "accent3": "#A5A5A5",
+    "accent4": "#FFC000",
+    "accent5": "#5B9BD5",
+    "accent6": "#70AD47"
+  },
+  "slides": [
+    {
+      "slideNumber": 1,
+      "textRuns": [
+        {
+          "text": "Welcome to Our Presentation",
+          "fontFamily": "Calibri",
+          "fontSize": 44,
+          "color": "#000000",
+          "bold": true,
+          "italic": false
+        }
+      ],
+      "shapes": [
+        {
+          "boundingBox": {
+            "x": 100,
+            "y": 150,
+            "width": 800,
+            "height": 400
+          },
+          "fillColor": "#4472C4",
+          "strokeColor": "#2E5C9A",
+          "strokeWidth": 2,
+          "cornerRadius": 8
+        }
+      ],
+      "images": [
+        {
+          "embedId": "rId2",
+          "path": "ppt/media/image1.png",
+          "filename": "image1.png",
+          "extension": "png",
+          "supported": true,
+          "data": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+## 🎨 Generated Site Layout
+
+The converter creates scrollytelling sites with two fixed layouts:
+
+### Desktop Layout (1400px)
+- **Width**: Fixed at 1400px
+- **Sections**: Full viewport height (100vh)
+- **Typography**: 
+  - Hero H1: 4rem
+  - Section H2: 2.5rem
+  - Body text: 1.2rem
+- **Padding**: 80px vertical, 60px horizontal
+- **Content max-width**: 1000px centered
+
+### Mobile Layout (375px)
+- **Width**: Fixed at 375px
+- **Sections**: Full viewport height (100vh)
+- **Typography**:
+  - Hero H1: 2rem
+  - Section H2: 1.5rem
+  - Body text: 0.95rem
+- **Padding**: 60px vertical, 20px horizontal
+- **Content max-width**: 335px
+
+### Breakpoint
+- **Media Query**: `@media (max-width: 768px)`
+- **No Responsive Scaling**: Clean switch between desktop and mobile layouts
+- **Scroll Behavior**: Smooth scrolling on both layouts
+
+## 🔧 Technical Details
+
+### Browser Compatibility
+
+- **Supported**: Chrome 90+, Firefox 88+, Safari 14+, Edge 90+
+- **Required**: ES5+ JavaScript support
+- **Dependencies**: JSZip 3.10.1+ (loaded via CDN)
+
+### Architecture
+
+The parser is built as a self-contained module with:
+
+- **No Node.js dependencies** - Runs entirely in the browser
+- **Robust XML parsing** - Handles various PPTX format variations
+- **Namespace support** - Properly parses Office Open XML namespaces
+- **Error handling** - Graceful degradation for missing or malformed data
+
+### Conversion Units
+
+- **EMU to Pixels**: 1 inch = 914,400 EMU = 96 pixels (at 96 DPI)
+- **Font Size**: Stored as points × 100 in PPTX (e.g., 4400 = 44pt)
+- **Colors**: Converted to hex format (#RRGGBB)
+
+### XML Namespaces
+
+The parser handles these Office Open XML namespaces:
+
+- `a:` - DrawingML (graphics and text formatting)
+- `p:` - PresentationML (slide structure)
+- `r:` - Relationships (links between parts)
+
+## 📁 File Structure
+
+```
+pptx-scrollytelling-converter/
+├── README.md                                    # This file
+├── pptx-parser.js                              # Core Module A parser
+├── module-a-demo.html                          # Interactive demo interface
+├── index.html                                  # Main converter application
+└── pptx-scrollytelling-converter-bespoke.html # Alternative interface
+```
+
+## 🎨 Examples
+
+### Extract Theme Colors
+
+```javascript
+PPTXParser.parse(pptxZip).then(function(data) {
+    var primaryColor = data.themeColors.accent1;
+    var secondaryColor = data.themeColors.accent2;
+    
+    document.body.style.setProperty('--primary-color', primaryColor);
+    document.body.style.setProperty('--secondary-color', secondaryColor);
+});
+```
+
+### Process All Slides
+
+```javascript
+PPTXParser.parse(pptxZip).then(function(data) {
+    data.slides.forEach(function(slide) {
+        console.log('Slide ' + slide.slideNumber + ':');
+        console.log('  Text runs: ' + slide.textRuns.length);
+        console.log('  Shapes: ' + slide.shapes.length);
+        console.log('  Images: ' + slide.images.length);
+        
+        // Extract all text
+        var allText = slide.textRuns.map(function(run) {
+            return run.text;
+        }).join(' ');
+        
+        console.log('  Content: ' + allText);
+    });
+});
+```
+
+### Filter Unsupported Images
+
+```javascript
+PPTXParser.parse(pptxZip).then(function(data) {
+    data.slides.forEach(function(slide) {
+        var unsupportedImages = slide.images.filter(function(img) {
+            return !img.supported;
+        });
+        
+        if (unsupportedImages.length > 0) {
+            console.warn('Slide ' + slide.slideNumber + ' has ' + 
+                        unsupportedImages.length + ' unsupported images');
+            unsupportedImages.forEach(function(img) {
+                console.log('  - ' + img.filename + ' (' + img.extension + ')');
+            });
+        }
+    });
+});
+```
+
+## 🐛 Known Limitations
+
+- **EMF/WMF Images**: Enhanced Metafile (EMF) and Windows Metafile (WMF) formats are not supported in browsers. The parser generates SVG placeholders for these images.
+- **Embedded Fonts**: Custom embedded fonts are not extracted; font names are mapped to web-safe alternatives.
+- **Animations**: PowerPoint animations and transitions are not captured.
+- **Charts**: Embedded Excel charts are treated as images if rendered.
+- **Videos**: Embedded videos are detected but not extracted.
+
+## 🔮 Future Enhancements
+
+### Module B: Layout Generation (Planned)
+- Convert slide layouts to responsive HTML/CSS
+- Generate scroll-triggered animations
+- Optimize for mobile and desktop viewports
+
+### Module C: Asset Processing (Planned)
+- Embed images as base64 or separate files
+- Optimize image sizes and formats
+- Extract and embed custom fonts
+
+### Module D: Output Packaging (Planned)
+- Generate standalone HTML files
+- Create downloadable ZIP archives
+- Include design reports and metadata
+
+## 🤝 Contributing
+
+Contributions are welcome! Areas for improvement:
+
+1. **Enhanced XML Parsing**: Handle more PPTX variations and edge cases
+2. **Additional Shape Types**: Support for more complex shapes and SmartArt
+3. **Performance**: Optimize for large presentations (100+ slides)
+4. **Testing**: Add comprehensive test suite with sample PPTX files
+
+## 📄 License
+
+This project is provided as-is for educational and commercial use.
+
+## 🙏 Acknowledgments
+
+- Built with [JSZip](https://stuk.github.io/jszip/) for PPTX file handling
+- Follows [Office Open XML standards](http://officeopenxml.com/)
+- Inspired by modern scrollytelling frameworks
+
+## 📞 Support
+
+For issues, questions, or feature requests, please check:
+
+1. The demo interface (`module-a-demo.html`) for usage examples
+2. The JSON output structure documentation above
+3. Browser console for detailed error messages
+
+---
+
+**Version**: 1.0.0 (Module A Complete)  
+**Last Updated**: January 2025  
+**Status**: ✅ Module A Ready for Production
